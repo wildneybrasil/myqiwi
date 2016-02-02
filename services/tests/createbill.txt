@@ -1,0 +1,12 @@
+curl -k -X POST --data '<request>
+<auth login="TesteMyQIWI01" sign="0ef3e419b0bb5196187e01d2b9ba4292" signAlg="MD5"/>
+<client serial="2134" software="X-Snake API v1.1" terminal="1524"/>
+	<agents>
+		<createBill>
+			<amount>3241.55</amount>
+		</createBill>
+	</agents>
+	</request>
+
+' https://189.36.23.69:8443/term2/xml.ashx
+
