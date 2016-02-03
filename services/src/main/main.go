@@ -240,6 +240,10 @@ func main() {
 			s_result, err := login(s_login_request)
 			if err != nil {
 				fmt.Println(err)
+
+				resultString, _ := json.Marshal(s_status{"failed", "System error", 500})
+				w.Write(resultString)
+
 				return
 			}
 			resultString, err := json.Marshal(s_result)
@@ -264,6 +268,10 @@ func main() {
 			s_result, err := getBalance(s_balance_request)
 			if err != nil {
 				fmt.Println(err)
+
+				resultString, _ := json.Marshal(s_status{"failed", "System error", 500})
+				w.Write(resultString)
+
 				return
 			}
 			resultString, err := json.Marshal(s_result)
@@ -287,6 +295,10 @@ func main() {
 			s_result, err := getProvider(s_provider_request)
 			if err != nil {
 				fmt.Println(err)
+
+				resultString, _ := json.Marshal(s_status{"failed", "System error", 500})
+				w.Write(resultString)
+
 				return
 			}
 			resultString, err := json.Marshal(s_result)
@@ -310,6 +322,10 @@ func main() {
 			s_result, err := transferCredits1(s_transferCredits_request)
 			if err != nil {
 				fmt.Println(err)
+
+				resultString, _ := json.Marshal(s_status{"failed", "System error", 500})
+				w.Write(resultString)
+
 				return
 			}
 			resultString, err := json.Marshal(s_result)
@@ -333,6 +349,10 @@ func main() {
 			s_result, err := transferCredits2(s_transferCredits_request)
 			if err != nil {
 				fmt.Println(err)
+
+				resultString, _ := json.Marshal(s_status{"failed", "System error", 500})
+				w.Write(resultString)
+
 				return
 			}
 			resultString, err := json.Marshal(s_result)
@@ -424,10 +444,18 @@ func main() {
 
 	log.Fatal(http.ListenAndServe(":8081", nil))
 }
-func createLogin(s_login_create_request s_login_create_request_hdr) (s_login_create_response_hdr, error) {
+func createLogin(s_login_create_request s_login_create_request_hdr) (s_login_create_response s_login_create_response_hdr, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("PANIC - ", r)
+
+			err = fmt.Errorf("panic")
+		}
+	}()
+
 	salt := random.RandomString(32)
 
-	s_login_create_response := s_login_create_response_hdr{}
+	s_login_create_response = s_login_create_response_hdr{}
 
 	dbConn := db.Connect()
 	defer dbConn.Close()
@@ -450,10 +478,17 @@ func createLogin(s_login_create_request s_login_create_request_hdr) (s_login_cre
 	return s_login_create_response, nil
 }
 
-func login(s_login_request s_login_request_hdr) (s_login_response_hdr, error) {
+func login(s_login_request s_login_request_hdr) (s_login_response s_login_response_hdr, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("PANIC - ", r)
+
+			err = fmt.Errorf("panic")
+		}
+	}()
 	authToken := random.RandomString(64)
 
-	s_login_response := s_login_response_hdr{}
+	s_login_response = s_login_response_hdr{}
 	s_login_response.Status = "failed"
 
 	dbConn := db.Connect()
@@ -507,8 +542,15 @@ func login(s_login_request s_login_request_hdr) (s_login_response_hdr, error) {
 	return s_login_response, nil
 }
 
-func getBalance(s_balance_request s_balance_request_hdr) (s_balance_response_hdr, error) {
-	s_balance_response := s_balance_response_hdr{}
+func getBalance(s_balance_request s_balance_request_hdr) (s_balance_response s_balance_response_hdr, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("PANIC - ", r)
+
+			err = fmt.Errorf("panic")
+		}
+	}()
+	s_balance_response = s_balance_response_hdr{}
 	fmt.Println("GET BALANCE " + s_balance_request.AuthToken)
 
 	dbConn := db.Connect()
@@ -532,8 +574,16 @@ func getBalance(s_balance_request s_balance_request_hdr) (s_balance_response_hdr
 	}
 	return s_balance_response, nil
 }
-func getProvider(s_provider_request s_provider_request_hdr) (s_provider_response_hdr, error) {
-	s_provider_response := s_provider_response_hdr{}
+func getProvider(s_provider_request s_provider_request_hdr) (s_provider_response s_provider_response_hdr, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("PANIC - ", r)
+
+			err = fmt.Errorf("panic")
+		}
+	}()
+
+	s_provider_response = s_provider_response_hdr{}
 	fmt.Println("GET PROVIDER " + s_provider_request.AuthToken)
 
 	dbConn := db.Connect()
@@ -600,8 +650,15 @@ func getProvider(s_provider_request s_provider_request_hdr) (s_provider_response
 	}
 	return s_provider_response, nil
 }
-func createBill(s_createBill_request s_createBill_request_hdr) (s_createBill_response_hdr, error) {
-	s_createBill_response := s_createBill_response_hdr{}
+func createBill(s_createBill_request s_createBill_request_hdr) (s_createBill_response s_createBill_response_hdr, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("PANIC - ", r)
+
+			err = fmt.Errorf("panic")
+		}
+	}()
+	s_createBill_response = s_createBill_response_hdr{}
 	fmt.Println("CREATE BILL " + s_createBill_request.AuthToken)
 
 	dbConn := db.Connect()
@@ -625,8 +682,15 @@ func createBill(s_createBill_request s_createBill_request_hdr) (s_createBill_res
 	}
 	return s_createBill_response, nil
 }
-func getBillImage(s_getBill_request s_getBill_request_hdr) (*s_geBill_image_response_hdr, error) {
-	s_geBill_image_response := s_geBill_image_response_hdr{}
+func getBillImage(s_getBill_request s_getBill_request_hdr) (s_geBill_image_response s_geBill_image_response_hdr, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("PANIC - ", r)
+
+			err = fmt.Errorf("panic")
+		}
+	}()
+	s_geBill_image_response = s_geBill_image_response_hdr{}
 	fmt.Println("CREATE BILL " + s_getBill_request.AuthToken)
 
 	dbConn := db.Connect()
@@ -647,10 +711,17 @@ func getBillImage(s_getBill_request s_getBill_request_hdr) (*s_geBill_image_resp
 		s_geBill_image_response.StatusCode = 403
 		s_geBill_image_response.ErrorMessage = "Login/Senha inválido"
 	}
-	return &s_geBill_image_response, nil
+	return s_geBill_image_response, nil
 }
-func transferCredits1(s_transferCredits_request s_transferCredits_request_hdr) (s_transferCredits_response_hdr, error) {
-	s_transferCredits_response := s_transferCredits_response_hdr{}
+func transferCredits1(s_transferCredits_request s_transferCredits_request_hdr) (s_transferCredits_response s_transferCredits_response_hdr, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("PANIC - ", r)
+
+			err = fmt.Errorf("panic")
+		}
+	}()
+	s_transferCredits_response = s_transferCredits_response_hdr{}
 
 	dbConn := db.Connect()
 
@@ -683,14 +754,16 @@ func transferCredits1(s_transferCredits_request s_transferCredits_request_hdr) (
 	}
 	return s_transferCredits_response, nil
 }
-func transferCredits2(s_transferCredits_request s_transferCredits_request_hdr) (s_transferCredits2_response_hdr, error) {
+func transferCredits2(s_transferCredits_request s_transferCredits_request_hdr) (s_transferCredits_response s_transferCredits2_response_hdr, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Println("Recovered in f", r)
+			fmt.Println("PANIC - ", r)
+
+			err = fmt.Errorf("panic")
 		}
 	}()
 
-	s_transferCredits_response := s_transferCredits2_response_hdr{}
+	s_transferCredits_response = s_transferCredits2_response_hdr{}
 
 	dbConn := db.Connect()
 
