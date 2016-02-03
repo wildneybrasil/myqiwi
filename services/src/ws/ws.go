@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/bmuller/arrow/lib"
@@ -90,7 +91,7 @@ type s_XMLLastPayment_hdr struct {
 	ReceiptNumber string `xml:"receipt-number,attr,omitempty"`
 }
 type s_XMLGetLastIDS_hdr struct {
-	XMLLastPayment s_XMLLastPayment_hdr `xml:"last-payment,attr,omitempty"`
+	XMLLastPayment s_XMLLastPayment_hdr `xml:"last-payment,omitempty"`
 }
 type s_XMLTerminals_hdr struct {
 	XMLGetLastIds *s_XMLGetLastIDS_hdr `xml:"getLastIds,omitempty"`
@@ -113,6 +114,11 @@ type WSResponse_createBill_hdr struct {
 	Result            string          `xml:"result,attr"`
 	ResultDescription string          `xml:"result-description,attr"`
 	XMLAgents         s_XMLAgents_hdr `xml:"agents"`
+}
+type WSResponse_transferCredits_hdr struct {
+	Result            string            `xml:"result,attr"`
+	ResultDescription string            `xml:"result-description,attr"`
+	XMLProvider       s_XMLProvider_hdr `xml:"providers"`
 }
 type WSResponse_lastGetID_hdr struct {
 	Result            string             `xml:"result,attr"`
@@ -296,12 +302,16 @@ func GetBillImage(s_credentials *db.Login_credentials_hdr, boletoId int) (*WSRes
 
 	return &s_response_createBill, nil
 }
-func TransferCredits(s_credentials *db.Login_credentials_hdr, toAccount string, toTerminal string, serviceId string, amount string) (*WSResponse_createBill_hdr, error) {
+func TransferCredits(s_credentials *db.Login_credentials_hdr, toAccount string, toTerminal string, serviceId string, amount string) (*WSResponse_transferCredits_hdr, error) {
 	fmt.Println("GET CREATE BILL")
 
-	s_response_createBill := WSResponse_createBill_hdr{}
+	s_response_createBill := WSResponse_transferCredits_hdr{}
 
 	currentDate := arrow.Now().CFormat("%Y-%m-%dT%H:%M:%S")
+
+	lastId, _ := GetLastID(s_credentials)
+	currentId, _ := strconv.ParseInt(lastId.XMLTerminals.XMLGetLastIds.XMLLastPayment.Id, 10, 0)
+	currentId = currentId + 1
 
 	requestType := s_request_data{}
 	requestType.XMLProvider = &s_XMLProvider_hdr{}
@@ -314,7 +324,7 @@ func TransferCredits(s_credentials *db.Login_credentials_hdr, toAccount string, 
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentTo.Account = toAccount
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentTo.Service = "15695"
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentReceipt.Date = currentDate
-	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentReceipt.Id = "1"
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentReceipt.Id = strconv.Itoa(int(currentId))
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_id = toTerminal
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_isWeb = "1"
 
@@ -329,7 +339,6 @@ func TransferCredits(s_credentials *db.Login_credentials_hdr, toAccount string, 
 		return nil, err
 	}
 
-	fmt.Println("BOLETO ID: " + s_response_createBill.XMLAgents.CreateBill.BoletoBill.Id)
 	return &s_response_createBill, nil
 }
 func GetLastID(s_credentials *db.Login_credentials_hdr) (*WSResponse_lastGetID_hdr, error) {
@@ -339,6 +348,7 @@ func GetLastID(s_credentials *db.Login_credentials_hdr) (*WSResponse_lastGetID_h
 
 	requestType := s_request_data{}
 	requestType.XMLTerminals = &s_XMLTerminals_hdr{}
+	requestType.XMLTerminals.XMLGetLastIds = &s_XMLGetLastIDS_hdr{}
 
 	result, err := send(s_credentials, &requestType)
 	if err != nil {

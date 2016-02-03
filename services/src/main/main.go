@@ -3,20 +3,37 @@ package main
 
 import (
 	"db"
+	b64 "encoding/base64"
 	"encoding/json"
 	"fmt"
 	"html"
 	"io"
 	"log"
+
 	"net/http"
+	"net/url"
+	"notification"
 	"random"
 	"strings"
 	"ws"
+
+	"golang.org/x/crypto/scrypt"
+)
+
+var (
+	MAXLOGIN = 99
 )
 
 type s_login_request_hdr struct {
-	Username string `json:"username"`
+	Email    string `json:"email"`
+	Cel      string `json:"cel"`
 	Password string `json:"password"`
+}
+type s_login_create_request_hdr struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+	Name     string `json:"name"`
+	Cel      string `json:"cel"`
 }
 type s_login_response_data_hdr struct {
 	AuthToken string `json:"authToken,omitempty"`
@@ -95,6 +112,10 @@ type s_geBill_image_response_hdr struct {
 	s_status
 	Data *s_geBill_image_data_response `json:"data,omitempty"`
 }
+type s_login_create_response_hdr struct {
+	s_status
+	Data *s_geBill_image_data_response `json:"data,omitempty"`
+}
 type s_transferCredits_response_hdr struct {
 	s_status
 }
@@ -104,18 +125,6 @@ type s_status struct {
 	ErrorMessage string `json:"errorMessage,omitempty"`
 	StatusCode   int    `json:"statusCode"`
 }
-
-//func (b *s_balance_response_hdr) Write(w http.ResponseWriter) {
-//	resultString, err := json.Marshal(b)
-
-//	if err != nil {
-//		fmt.Println(err)
-//		return
-//	}
-//	fmt.Println(b.Data)
-
-//	w.Write(resultString)
-//}
 
 func parseContent(source io.Reader, dest interface{}) error {
 	decoder := json.NewDecoder(source)
@@ -140,6 +149,8 @@ func parseContent(source io.Reader, dest interface{}) error {
 
 //}
 func main() {
+
+	notification.Connect()
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 
@@ -168,6 +179,39 @@ func main() {
 			}
 			w.Write(resultString)
 
+			break
+		case "/activateAccount":
+			url, _ := url.Parse(r.URL.String())
+			dbConn := db.Connect()
+
+			token := url.Query().Get("TOKEN")
+
+			fmt.Println(token)
+			status := s_status{}
+			status.Status = "failed"
+			status.StatusCode = 500
+			status.ErrorMessage = "Parametros'"
+
+			if len(token) > 0 {
+				userInfo, err := db.GetLoginInfoBySalt(dbConn, token)
+				if err != nil {
+					status.StatusCode = 403
+					status.ErrorMessage = "Token não existe'"
+				} else if userInfo.Status == 0 {
+					db.ActivateUser(dbConn, token)
+					status.StatusCode = 0
+					status.Status = "success"
+				}
+			}
+			resultString, err := json.Marshal(status)
+
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			w.Write(resultString)
+
+			dbConn.Close()
 			break
 		case "/listServicos":
 			s_login_request := s_login_request_hdr{}
@@ -285,6 +329,29 @@ func main() {
 			w.Write(resultString)
 
 			break
+		case "/createAccount":
+			s_login_create_request := s_login_create_request_hdr{}
+
+			err := parseContent(r.Body, &s_login_create_request)
+			if err != nil {
+				fmt.Println(err.Error())
+				w.Write([]byte(err.Error()))
+			}
+
+			s_result, err := createLogin(s_login_create_request)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			resultString, err := json.Marshal(s_result)
+
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			w.Write(resultString)
+
+			break
 		case "/getBoletoImage":
 			s_getBill_request := s_getBill_request_hdr{}
 
@@ -318,8 +385,34 @@ func main() {
 
 	log.Fatal(http.ListenAndServe(":8081", nil))
 }
+func createLogin(s_login_create_request s_login_create_request_hdr) (s_login_create_response_hdr, error) {
+	salt := random.RandomString(32)
+
+	s_login_create_response := s_login_create_response_hdr{}
+
+	dbConn := db.Connect()
+	defer dbConn.Close()
+
+	dk, err := scrypt.Key([]byte(s_login_create_request.Password), []byte(salt), 16384, 8, 1, 32)
+	if err != nil {
+		s_login_create_response.StatusCode = 500
+		s_login_create_response.ErrorMessage = "Internal server error"
+
+		return s_login_create_response, nil
+	}
+	dkb64Encoded := b64.StdEncoding.EncodeToString([]byte(dk))
+
+	fmt.Println(dkb64Encoded)
+
+	db.CreateAccount(dbConn, s_login_create_request.Email, s_login_create_request.Cel, dkb64Encoded, salt, s_login_create_request.Name)
+
+	notification.Send(notification.NotificationMessage{"sms", "11989288082", "QIWI - Ative seu usuario. clique no link http://qiwi/?TOKEN=" + salt})
+
+	return s_login_create_response, nil
+}
+
 func login(s_login_request s_login_request_hdr) (s_login_response_hdr, error) {
-	authToken := random.RandomString(20)
+	authToken := random.RandomString(64)
 
 	s_login_response := s_login_response_hdr{}
 	s_login_response.Status = "failed"
@@ -327,22 +420,51 @@ func login(s_login_request s_login_request_hdr) (s_login_response_hdr, error) {
 	dbConn := db.Connect()
 	defer dbConn.Close()
 
-	s_login_credentials, err := db.LoginUsername(dbConn, s_login_request.Username, s_login_request.Password)
-
+	s_login_credentials, err := db.GetLoginInfoByEmail(dbConn, s_login_request.Email)
 	if err != nil {
 		s_login_response.StatusCode = 403
 		s_login_response.ErrorMessage = "Login/Senha inválido"
-	} else {
-		if s_login_credentials.Id != 0 {
-			db.InsertToken(dbConn, s_login_credentials.Id, authToken)
 
-			s_login_response.Status = "success"
-			s_login_response.Data.AuthToken = authToken
-		} else {
-			s_login_response.StatusCode = 403
-			s_login_response.ErrorMessage = "Login/Senha inválido"
-		}
+		return s_login_response, nil
 	}
+	if s_login_credentials.FailedLoginCount > MAXLOGIN {
+		s_login_response.StatusCode = 403
+		s_login_response.ErrorMessage = "Tentativas excedidas"
+
+		return s_login_response, nil
+	}
+	if s_login_credentials.Status == 0 {
+		s_login_response.StatusCode = 403
+		s_login_response.ErrorMessage = "Usuario não ativado"
+
+		return s_login_response, nil
+	}
+
+	dk, err := scrypt.Key([]byte(s_login_request.Password), []byte(s_login_credentials.PasswordSalt), 16384, 8, 1, 32)
+	if err != nil {
+		s_login_response.StatusCode = 403
+		s_login_response.ErrorMessage = "Login/Senha inválido"
+
+		return s_login_response, nil
+	}
+	dkb64Encoded := b64.StdEncoding.EncodeToString([]byte(dk))
+
+	fmt.Println(dkb64Encoded)
+
+	if dkb64Encoded == s_login_credentials.Password {
+		db.ResetFailedLoginOfEmail(dbConn, s_login_request.Email)
+		db.InsertToken(dbConn, s_login_credentials.Id, authToken)
+
+		s_login_response.Status = "success"
+		s_login_response.Data.AuthToken = authToken
+	} else {
+		db.IncreaseFailedLoginOfEmail(dbConn, s_login_request.Email)
+
+		s_login_response.StatusCode = 403
+		s_login_response.ErrorMessage = "Login/Senha inválido"
+
+	}
+
 	return s_login_response, nil
 }
 
