@@ -62,6 +62,8 @@ type s_transferCredits_request_hdr struct {
 	Account   string `json:"account"`
 	Terminal  string `json:"terminal"`
 	Service   string `json:"service"`
+	Id        string `json:"id"`
+	session   string `json:"session"`
 }
 
 type s_createBill_request_hdr struct {
@@ -70,7 +72,7 @@ type s_createBill_request_hdr struct {
 }
 type s_getBill_request_hdr struct {
 	AuthToken string `json:"authToken"`
-	BoletoId  int    `json:"boletoId"`
+	BoletoId  string `json:"boletoId"`
 }
 type s_provider_request_hdr struct {
 	AuthToken string `json:"authToken"`
@@ -116,8 +118,21 @@ type s_login_create_response_hdr struct {
 	s_status
 	Data *s_geBill_image_data_response `json:"data,omitempty"`
 }
+type s_values_item_hdr struct {
+	Id     string `json:"id,attr,omitempty"`
+	Amount string `json:"amount,attr,omitempty"`
+}
+type s_values_response_hdr struct {
+	Items []s_values_item_hdr `json:"items,omitempty"`
+}
 type s_transferCredits_response_hdr struct {
 	s_status
+	Nominals s_values_response_hdr `json:"nominals,omitempty"`
+}
+type s_transferCredits2_response_hdr struct {
+	s_status
+	Voucher string `json:"voucher,omitempty"`
+	Amount  string `json:"amount,omitempty"`
 }
 
 type s_status struct {
@@ -283,7 +298,7 @@ func main() {
 			w.Write(resultString)
 
 			break
-		case "/transferCredits":
+		case "/transferCredits1":
 			s_transferCredits_request := s_transferCredits_request_hdr{}
 
 			err := parseContent(r.Body, &s_transferCredits_request)
@@ -292,7 +307,7 @@ func main() {
 				w.Write([]byte(err.Error()))
 			}
 
-			s_result, err := transferCredits(s_transferCredits_request)
+			s_result, err := transferCredits1(s_transferCredits_request)
 			if err != nil {
 				fmt.Println(err)
 				return
@@ -306,6 +321,30 @@ func main() {
 			w.Write(resultString)
 
 			break
+		case "/transferCredits2":
+			s_transferCredits_request := s_transferCredits_request_hdr{}
+
+			err := parseContent(r.Body, &s_transferCredits_request)
+			if err != nil {
+				fmt.Println(err.Error())
+				w.Write([]byte(err.Error()))
+			}
+
+			s_result, err := transferCredits2(s_transferCredits_request)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			resultString, err := json.Marshal(s_result)
+
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			w.Write(resultString)
+
+			break
+
 		case "/createBill":
 			s_createBill_request := s_createBill_request_hdr{}
 
@@ -610,7 +649,7 @@ func getBillImage(s_getBill_request s_getBill_request_hdr) (*s_geBill_image_resp
 	}
 	return &s_geBill_image_response, nil
 }
-func transferCredits(s_transferCredits_request s_transferCredits_request_hdr) (s_transferCredits_response_hdr, error) {
+func transferCredits1(s_transferCredits_request s_transferCredits_request_hdr) (s_transferCredits_response_hdr, error) {
 	s_transferCredits_response := s_transferCredits_response_hdr{}
 
 	dbConn := db.Connect()
@@ -619,11 +658,54 @@ func transferCredits(s_transferCredits_request s_transferCredits_request_hdr) (s
 
 	s_login_credentials, err := db.GetAuthToken(dbConn, s_transferCredits_request.AuthToken)
 	if err == nil && s_login_credentials.Id > 0 {
-		_, err := ws.TransferCredits(s_login_credentials, s_transferCredits_request.Account, s_transferCredits_request.Terminal, s_transferCredits_request.Service, s_transferCredits_request.Amount)
+		transferResponse, err := ws.TransferCredits1(s_login_credentials, s_transferCredits_request.Account, s_transferCredits_request.Terminal, s_transferCredits_request.Service, s_transferCredits_request.Amount)
 		if err != nil {
 			s_transferCredits_response.StatusCode = 500
 			s_transferCredits_response.ErrorMessage = "Internal server error"
 		} else {
+			strNominalsValue1 := transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp1
+			strNominalsValue3 := transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp3
+			V1 := strings.Split(strNominalsValue1, ";")
+			V3 := strings.Split(strNominalsValue3, ";")
+
+			for k, _ := range V1 {
+
+				item := s_values_item_hdr{}
+				item.Amount = V1[k]
+				item.Id = V3[k]
+
+				s_transferCredits_response.Nominals.Items = append(s_transferCredits_response.Nominals.Items, item)
+			}
+		}
+	} else {
+		s_transferCredits_response.StatusCode = 403
+		s_transferCredits_response.ErrorMessage = "Login/Senha inválido"
+	}
+	return s_transferCredits_response, nil
+}
+func transferCredits2(s_transferCredits_request s_transferCredits_request_hdr) (s_transferCredits2_response_hdr, error) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("Recovered in f", r)
+		}
+	}()
+
+	s_transferCredits_response := s_transferCredits2_response_hdr{}
+
+	dbConn := db.Connect()
+
+	defer dbConn.Close()
+
+	s_login_credentials, err := db.GetAuthToken(dbConn, s_transferCredits_request.AuthToken)
+	if err == nil && s_login_credentials.Id > 0 {
+		transferResponse, err := ws.TransferCredits2(s_login_credentials, s_transferCredits_request.Id, s_transferCredits_request.session, s_transferCredits_request.Account, s_transferCredits_request.Terminal, s_transferCredits_request.Service, s_transferCredits_request.Amount)
+		if err != nil {
+			s_transferCredits_response.StatusCode = 500
+			s_transferCredits_response.ErrorMessage = "Internal server error"
+		} else {
+			fmt.Println(transferResponse.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLVoucher.Code)
+			s_transferCredits_response.Voucher = transferResponse.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLVoucher.Code
+			s_transferCredits_response.Amount = transferResponse.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLVoucher.Amount
 		}
 	} else {
 		s_transferCredits_response.StatusCode = 403
