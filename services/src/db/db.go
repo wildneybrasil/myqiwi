@@ -50,20 +50,21 @@ func InsertToken(db *sql.DB, userId int, token string) error {
 	return nil
 
 }
-func CreateAccount(db *sql.DB, email string, cel string, password string, salt string, name string) error {
-	stmt, err := db.Prepare(`insert into user_credentials (  email, cel, password, password_salt, name,status ) values ( $1,$2, $3,$4,$5,1 )`)
+func CreateAccount(db *sql.DB, email string, cel string, password string, salt string, name string) (int, error) {
+	stmt, err := db.Prepare(`insert into user_credentials (  email, cel, password, password_salt, name,status ) values ( $1,$2, $3,$4,$5,1 )  RETURNING id`)
 	defer stmt.Close()
 
 	if err != nil {
 		fmt.Println(err.Error())
-		return err
+		return 0, err
 	}
-	_, err = stmt.Exec(email, cel, password, salt, name)
+	id := 0
+	err = stmt.QueryRow(email, cel, password, salt, name).Scan(&id)
 	if err != nil {
 		fmt.Println(err.Error())
-		return err
+		return 0, err
 	}
-	return nil
+	return id, nil
 
 }
 func VerifyAuth(db *sql.DB, authToken string) int {

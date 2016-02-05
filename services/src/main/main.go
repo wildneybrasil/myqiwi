@@ -831,9 +831,15 @@ func activateAccount(s_request s_activate_request_hdr) (result s_status, err err
 		panic(err)
 	}
 	if s_request.ActivationCode == s_redis.ActivationCode {
-		err = db.CreateAccount(dbConn, s_redis.Email, s_redis.Cel, s_redis.Password, s_redis.Salt, s_redis.Name)
+		id, err := db.CreateAccount(dbConn, s_redis.Email, s_redis.Cel, s_redis.Password, s_redis.Salt, s_redis.Name)
+		if err != nil {
+			panic(err)
+		}
 		result.Status = "success"
 		result.StatusCode = 0
+
+		db.InsertToken(dbConn, id, s_request.AuthToken)
+
 	} else {
 		result.Status = "failed"
 		result.StatusCode = 0
