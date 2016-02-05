@@ -66,6 +66,29 @@ func CreateAccount(db *sql.DB, email string, cel string, password string, salt s
 	return nil
 
 }
+func VerifyAuth(db *sql.DB, authToken string) int {
+	result := 0
+
+	stmt, err := db.Prepare(`select 1 from user_credentials where authToken=$1 and status=1`)
+	defer stmt.Close()
+
+	if err != nil {
+		fmt.Println(err.Error())
+		return 0
+	}
+	err = stmt.QueryRow(authToken).Scan(&result)
+
+	if err != nil {
+		fmt.Println(err.Error())
+		return 0
+	}
+
+	if result == 1 {
+		return 1
+	}
+	return 0
+
+}
 func ResetFailedLoginOfEmail(db *sql.DB, email string) error {
 	stmt, err := db.Prepare(`update user_credentials set login_failed_count = 0 where email=$1`)
 	defer stmt.Close()
@@ -185,7 +208,7 @@ func GetAuthToken(db *sql.DB, authToken string) (*Login_credentials_hdr, error) 
 	s_login_credentials := Login_credentials_hdr{}
 	fmt.Println("AUTH" + authToken)
 
-	stmt, err := db.Prepare("select  u.id, u.terminal_login, u.terminal_id , u.terminal_serial,terminal_password from user_tokens t, user_credentials u where t.user_credential_id=u.id and t.token=$1")
+	stmt, err := db.Prepare("select  u.id, u.terminal_login, u.terminal_id , u.terminal_serial,terminal_password from user_tokens t, user_credentials u where t.user_credential_id=u.id and t.token=$1 and u.status=1")
 	if err != nil {
 		log.Fatal(err)
 	}

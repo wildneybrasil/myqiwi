@@ -9,12 +9,14 @@ import (
 	"html"
 	"io"
 	"log"
+	"redis"
 
 	"net/http"
 	"net/url"
 	"notification"
 	"random"
 	"strings"
+	"time"
 	"ws"
 
 	"golang.org/x/crypto/scrypt"
@@ -24,10 +26,24 @@ var (
 	MAXLOGIN = 99
 )
 
+type s_redis_create_account_hdr struct {
+	Email          string `json:"email"`
+	Password       string `json:"password"`
+	Name           string `json:"name"`
+	Cel            string `json:"cel"`
+	Salt           string `json:"salt"`
+	ActivationCode string `json:"activationCode"`
+	AuthToken      string `json:"authToken"`
+}
+
 type s_login_request_hdr struct {
 	Email    string `json:"email"`
 	Cel      string `json:"cel"`
 	Password string `json:"password"`
+}
+type s_activate_request_hdr struct {
+	AuthToken       string `json:"authToken"`
+	ActivationToken string `json:"activationToken"`
 }
 type s_login_create_request_hdr struct {
 	Email    string `json:"email"`
@@ -116,7 +132,7 @@ type s_geBill_image_response_hdr struct {
 }
 type s_login_create_response_hdr struct {
 	s_status
-	Data *s_geBill_image_data_response `json:"data,omitempty"`
+	Data *s_login_response_data_hdr `json:"data,omitempty"`
 }
 type s_values_item_hdr struct {
 	Id     string `json:"id,attr,omitempty"`
@@ -196,6 +212,26 @@ func main() {
 
 			break
 		case "/activateAccount":
+			s_activate_request := s_activate_request_hdr{}
+
+			err := parseContent(r.Body, &s_activate_request)
+			if err != nil {
+				fmt.Println(err.Error())
+				w.Write([]byte(err.Error()))
+			}
+
+			result, err := activateAccount(s_activate_request)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			resultString, _ := json.Marshal(result)
+			w.Write(resultString)
+
+			break
+		case "/activateGETAccount":
+			//	db.CreateAccount(dbConn, s_login_create_request.Email, s_login_create_request.Cel, dkb64Encoded, salt, s_login_create_request.Name)
+
 			url, _ := url.Parse(r.URL.String())
 			dbConn := db.Connect()
 
@@ -453,7 +489,9 @@ func createLogin(s_login_create_request s_login_create_request_hdr) (s_login_cre
 		}
 	}()
 
-	salt := random.RandomString(32)
+	activationCode := random.RandomNumberString(6)
+	authToken := random.RandomString(64)
+	salt := random.RandomNumberString(6)
 
 	s_login_create_response = s_login_create_response_hdr{}
 
@@ -471,9 +509,22 @@ func createLogin(s_login_create_request s_login_create_request_hdr) (s_login_cre
 
 	fmt.Println(dkb64Encoded)
 
-	db.CreateAccount(dbConn, s_login_create_request.Email, s_login_create_request.Cel, dkb64Encoded, salt, s_login_create_request.Name)
+	s_redis := s_redis_create_account_hdr{}
+	s_redis.Name = s_login_create_request.Name
+	s_redis.Cel = s_login_create_request.Cel
+	s_redis.Email = s_login_create_request.Email
+	s_redis.Password = dkb64Encoded
+	s_redis.Salt = salt
+	s_redis.AuthToken = authToken
+	s_redis.ActivationCode = activationCode
 
-	notification.Send(notification.NotificationMessage{"sms", "11989288082", "QIWI - Ative seu usuario. clique no link http://qiwi/?TOKEN=" + salt})
+	redisString, _ := json.Marshal(s_redis)
+	redis.Set(s_redis.AuthToken, string(redisString), 10*time.Minute)
+
+	notification.Send(notification.NotificationMessage{"sms", s_login_create_request.Cel, "QIWI - Seu codigo de ativação é: " + activationCode})
+
+	s_login_create_response.Data = &s_login_response_data_hdr{}
+	s_login_create_response.Data.AuthToken = authToken
 
 	return s_login_create_response, nil
 }
@@ -550,6 +601,7 @@ func getBalance(s_balance_request s_balance_request_hdr) (s_balance_response s_b
 			err = fmt.Errorf("panic")
 		}
 	}()
+
 	s_balance_response = s_balance_response_hdr{}
 	fmt.Println("GET BALANCE " + s_balance_request.AuthToken)
 
@@ -754,6 +806,42 @@ func transferCredits1(s_transferCredits_request s_transferCredits_request_hdr) (
 	}
 	return s_transferCredits_response, nil
 }
+func activateAccount(s_request s_activate_request_hdr) (result s_status, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			result.Status = "failed"
+			result.StatusCode = 0
+			result.ErrorMessage = "AuthToken invalido"
+			err = nil
+		}
+	}()
+
+	dbConn := db.Connect()
+
+	defer dbConn.Close()
+
+	s_redis := s_redis_create_account_hdr{}
+
+	redisString, err := redis.Get(s_request.AuthToken)
+	if err != nil {
+		panic(err)
+	}
+	err = json.Unmarshal([]byte(*redisString), &s_redis)
+	if err != nil {
+		panic(err)
+	}
+	if s_request.ActivationToken == s_redis.ActivationCode {
+		err = db.CreateAccount(dbConn, s_redis.Email, s_redis.Cel, s_redis.Password, s_redis.Salt, s_redis.Name)
+		result.Status = "success"
+		result.StatusCode = 0
+	} else {
+		result.Status = "failed"
+		result.StatusCode = 0
+		result.ErrorMessage = "Código de ativação invalido"
+	}
+	return result, nil
+}
+
 func transferCredits2(s_transferCredits_request s_transferCredits_request_hdr) (s_transferCredits_response s_transferCredits2_response_hdr, err error) {
 	defer func() {
 		if r := recover(); r != nil {
