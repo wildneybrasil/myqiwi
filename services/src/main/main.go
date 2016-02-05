@@ -42,8 +42,8 @@ type s_login_request_hdr struct {
 	Password string `json:"password"`
 }
 type s_activate_request_hdr struct {
-	AuthToken       string `json:"authToken"`
-	ActivationToken string `json:"activationToken"`
+	AuthToken      string `json:"authToken"`
+	ActivationCode string `json:"activationCode"`
 }
 type s_login_create_request_hdr struct {
 	Email    string `json:"email"`
@@ -491,7 +491,7 @@ func createLogin(s_login_create_request s_login_create_request_hdr) (s_login_cre
 
 	activationCode := random.RandomNumberString(6)
 	authToken := random.RandomString(64)
-	salt := random.RandomNumberString(6)
+	salt := random.RandomString(32)
 
 	s_login_create_response = s_login_create_response_hdr{}
 
@@ -568,7 +568,7 @@ func login(s_login_request s_login_request_hdr) (s_login_response s_login_respon
 	dk, err := scrypt.Key([]byte(s_login_request.Password), []byte(s_login_credentials.PasswordSalt), 16384, 8, 1, 32)
 	if err != nil {
 		s_login_response.StatusCode = 403
-		s_login_response.ErrorMessage = "Login/Senha inválido"
+		s_login_response.ErrorMessage = "Login/Senha inválido."
 
 		return s_login_response, nil
 	}
@@ -830,7 +830,7 @@ func activateAccount(s_request s_activate_request_hdr) (result s_status, err err
 	if err != nil {
 		panic(err)
 	}
-	if s_request.ActivationToken == s_redis.ActivationCode {
+	if s_request.ActivationCode == s_redis.ActivationCode {
 		err = db.CreateAccount(dbConn, s_redis.Email, s_redis.Cel, s_redis.Password, s_redis.Salt, s_redis.Name)
 		result.Status = "success"
 		result.StatusCode = 0

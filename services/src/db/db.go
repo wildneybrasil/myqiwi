@@ -51,7 +51,7 @@ func InsertToken(db *sql.DB, userId int, token string) error {
 
 }
 func CreateAccount(db *sql.DB, email string, cel string, password string, salt string, name string) error {
-	stmt, err := db.Prepare(`insert into user_credentials (  email, cel, password, password_salt, name ) values ( $1,$2, $3,$4,$5 )`)
+	stmt, err := db.Prepare(`insert into user_credentials (  email, cel, password, password_salt, name,status ) values ( $1,$2, $3,$4,$5,1 )`)
 	defer stmt.Close()
 
 	if err != nil {
