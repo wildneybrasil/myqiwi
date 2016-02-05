@@ -28,7 +28,7 @@ type Services_hdr struct {
 }
 
 func Connect() *sql.DB {
-	db, err := sql.Open("postgres", "host=localhost dbname=qiwi sslmode=disable")
+	db, err := sql.Open("postgres", "host=postgres dbname=qiwi sslmode=disable")
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	ADDR = "localhost:6379"
+	ADDR = "redis:6379"
 )
 
 func Get(key string) (*string, error) {
