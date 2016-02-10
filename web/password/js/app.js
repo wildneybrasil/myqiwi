@@ -16,12 +16,13 @@ var techPayApp = angular.module('techPayApp', [
 var techPayControllers = angular.module('techPayControllers', []);
 
 
-techPayApp.config(function ($stateProvider, $urlRouterProvider) {
+techPayApp.config(function ($stateProvider, $urlRouterProvider,$locationProvider) {
+//    $locationProvider.html5Mode(true);
     $urlRouterProvider.otherwise("/password");
 
     $stateProvider
         .state('password', {
-            url: "/password",
+            url: "/password/:email/:token",
             templateUrl: "/password/password/password.html",
             controller: 'LoginCtrl'
         })

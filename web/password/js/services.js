@@ -14,10 +14,18 @@ techPayServices.factory('authorization', function ($http) {
       var jsonRequest = {
         email: credentials.email,
         password: credentials.password,
-        token: credentials.token
+        recoveryToken: credentials.token
       };
 
-      return $http.post(host + '/chpassword', jsonRequest);
+      return $http.post(host + '/changeLP', jsonRequest);
+    },
+    verifyToken: function (credentials) {
+      var jsonRequest = {
+        email: credentials.email,
+        recoveryToken: credentials.token
+      };
+
+      return $http.post(host + '/verifyLPToken', jsonRequest);
     }
   };
 });
