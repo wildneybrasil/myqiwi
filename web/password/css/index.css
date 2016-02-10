@@ -1,0 +1,86 @@
+header {
+  position: absolute;
+  padding-top: 32px;
+  z-index: 3; }
+
+.big-logo {
+  float: left;
+  width: 217px;
+  height: 119px;
+  margin-left: -8px;
+  background: url("../img/logo_techpay_big.png") no-repeat top left; }
+
+section.slideshow {
+  min-height: 532px;
+  background: transparent; }
+  section.slideshow .prev, section.slideshow .next {
+    height: 100%;
+    min-height: 780px;
+    z-index: -1; }
+  section.slideshow .prev {
+    margin-left: -548px; }
+  section.slideshow .next {
+    margin-right: -548px; }
+  section.slideshow .page-control {
+    bottom: 64px;
+    left: 50%;
+    margin-left: -60px; }
+  section.slideshow.big {
+    position: absolute;
+    top: 0;
+    z-index: 1; }
+  section.slideshow .slide {
+    padding-top: 124px;
+    height: 500px; }
+    section.slideshow .slide .content h1 {
+      position: static;
+      padding-left: 0; }
+
+.page-control {
+  display: block;
+  position: absolute;
+  margin: auto;
+  width: 124px;
+  padding: 0; }
+  .page-control li {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    margin: 2px;
+    background: url("../img/icon_page.png") no-repeat center; }
+    .page-control li.selected {
+      background: url("../img/icon_page_selected.png") no-repeat center; }
+
+#slide-welcome h1, #slide-welcome p {
+  width: 400px;
+  color: white; }
+#slide-welcome h1 {
+  margin-top: 0; }
+#slide-welcome .btn {
+  display: inline-block;
+  width: 176px;
+  padding: 8px;
+  margin: 16px 8px 16px 0;
+  font-size: 1em; }
+  #slide-welcome .btn + .btn {
+    margin-left: 0; }
+#slide-welcome .left-col {
+  display: inline-block;
+  width: 50%; }
+#slide-welcome .right-col {
+  display: inline-block;
+  width: 50%; }
+
+.call-to-action {
+  width: 100%;
+  position: absolute;
+  bottom: 0;
+  padding: 8px 16px;
+  background: #F9F9F9;
+  box-sizing: border-box;
+  z-index: 2; }
+  .call-to-action span {
+    font-weight: lighter;
+    color: #216CD8; }
+
+/*# sourceMappingURL=index.css.map */

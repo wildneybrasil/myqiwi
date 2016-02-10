@@ -12,6 +12,20 @@ var (
 	ADDR = "redis:6379"
 )
 
+func Del(key string) error {
+	client := redis.NewClient(&redis.Options{
+		Addr:     ADDR,
+		Password: "", // no password set
+		DB:       0,  // use default DB
+	})
+	fmt.Println("KEY:" + key)
+
+	client.Del(key).Result()
+
+	client.Close()
+
+	return nil
+}
 func Get(key string) (*string, error) {
 	client := redis.NewClient(&redis.Options{
 		Addr:     ADDR,

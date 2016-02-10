@@ -1,0 +1,82 @@
+<html ng-app="techPayApp" >
+<head>
+
+</head>
+<body bgcolor="#ff777777">
+				<form  ng-controller="HomeCtrl" ng-submit="addCredit()" method="POST" >
+    <div class="navbar-wrapper">
+      <div class="container">
+
+        <nav class="navbar navbar-inverse navbar-static-top">
+          <div class="container">
+            <div class="navbar-header">
+              <div class="navbar-brand" href="#">Busca:</div>
+            </div>
+			<div id="navbar" class="navbar-collapse collapse">
+				<div class="navbar-form navbar-left">
+                  <div class="form-group">
+		              <input  class="form-control" type="text" name="search" ng-change="searchAluno()"   ng-model='search'  />
+                  </div>
+                  </div>
+                  </div>
+
+          </div>
+        </nav>
+
+      </div>
+    </div>
+
+<div class="jumbotron">
+      <div class="container">
+<br />
+<br />
+	<form  ng-controller="HomeCtrl" ng-submit="addCredit()" method="POST">
+ 		<select ng-change="setUser()"  name="selUser" id="selUser" ng-model="selectedUser" size="20"  >
+     		 <option ng-repeat="user in usuarios" value="{{user.id}}">{{user.Nome}}</option>
+	    </select>
+	    <div id="right">
+    <div class="info-card">
+
+      <table>
+      <tr>
+        <td width="150px"> 
+	    	<p>RA: </p>
+        </td><td><p>{{user.RA}}</p>
+        </tr>
+        <tr>
+        <td>
+        <p>Nome: </p>
+        </td>
+        <td>
+        <p>{{user.Nome}}</p>
+        </td>
+        </tr>
+        <tr>
+        <td>
+	    	<p>Responsavel: </p>
+        </td>
+        <td>
+        <p>{{user.responsavel}}</p>
+        </td>
+        </tr>
+        </table>
+<br/>
+<br/>
+<br/>
+			<p>Adicionar os creditos:</p>
+			<input type="text" style="font-size:46;width:300px" ng-model="creditostoadd" ng-currency ng-required="true" min="0" max="100"/>
+
+			<input type="submit" style="width:200px" id="submit" value="Creditar valor"  class="btn btn-primary btn-sml" />
+        </div>
+      </div>
+    </div>
+    </div>
+
+
+
+
+
+
+</form>
+</html>
+

@@ -122,6 +122,22 @@ func ActivateUser(db *sql.DB, token string) error {
 	return nil
 
 }
+func ChangePassword(db *sql.DB, email string, password string, salt string) error {
+	stmt, err := db.Prepare(`update user_credentials set password = $2, password_salt=$3 where email=$1`)
+	defer stmt.Close()
+
+	if err != nil {
+		fmt.Println(err.Error())
+		return err
+	}
+	_, err = stmt.Exec(email, password, salt)
+	if err != nil {
+		fmt.Println(err.Error())
+		return err
+	}
+	return nil
+
+}
 func IncreaseFailedLoginOfEmail(db *sql.DB, email string) error {
 	stmt, err := db.Prepare(`update user_credentials set login_failed_count = login_failed_count + 1 where email=$1`)
 	defer stmt.Close()

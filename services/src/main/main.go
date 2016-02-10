@@ -35,6 +35,10 @@ type s_redis_create_account_hdr struct {
 	ActivationCode string `json:"activationCode"`
 	AuthToken      string `json:"authToken"`
 }
+type s_redis_lost_password_hdr struct {
+	Email        string `json:"email"`
+	RecoverToken string `json:"recoverToken"`
+}
 
 type s_login_request_hdr struct {
 	Email    string `json:"email"`
@@ -54,7 +58,11 @@ type s_login_create_request_hdr struct {
 type s_login_response_data_hdr struct {
 	AuthToken string `json:"authToken,omitempty"`
 }
-
+type s_lost_password_hdr struct {
+	Email         string `json:"email"`
+	Password      string `json:"password"`
+	RecoveryToken string `json:"recoveryToken"`
+}
 type s_login_response_hdr struct {
 	s_status
 	Data s_login_response_data_hdr `json:"data,omitempty"`
@@ -187,8 +195,10 @@ func main() {
 
 		path := html.EscapeString(r.URL.Path)
 
+		fmt.Println("PATH: " + path)
+
 		switch path {
-		case "/login":
+		case "/ws/login":
 			s_login_request := s_login_request_hdr{}
 
 			err := parseContent(r.Body, &s_login_request)
@@ -211,7 +221,7 @@ func main() {
 			w.Write(resultString)
 
 			break
-		case "/activateAccount":
+		case "/ws/activateAccount":
 			s_activate_request := s_activate_request_hdr{}
 
 			err := parseContent(r.Body, &s_activate_request)
@@ -229,7 +239,7 @@ func main() {
 			w.Write(resultString)
 
 			break
-		case "/activateGETAccount":
+		case "/ws/activateGETAccount":
 			//	db.CreateAccount(dbConn, s_login_create_request.Email, s_login_create_request.Cel, dkb64Encoded, salt, s_login_create_request.Name)
 
 			url, _ := url.Parse(r.URL.String())
@@ -264,7 +274,7 @@ func main() {
 
 			dbConn.Close()
 			break
-		case "/listServicos":
+		case "/ws/listServicos":
 			s_login_request := s_login_request_hdr{}
 
 			err := parseContent(r.Body, &s_login_request)
@@ -291,8 +301,67 @@ func main() {
 			w.Write(resultString)
 
 			break
+		case "/ws/lostPassword":
+			s_lost_password := s_lost_password_hdr{}
 
-		case "/getBalance":
+			err := parseContent(r.Body, &s_lost_password)
+			if err != nil {
+				fmt.Println(err.Error())
+				w.Write([]byte(err.Error()))
+			}
+
+			lostPassword(s_lost_password)
+
+			resultString, _ := json.Marshal(s_status{"success", "", 0})
+
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			w.Write(resultString)
+
+			break
+		case "/ws/verifyLPToken":
+			s_lost_password := s_lost_password_hdr{}
+
+			err := parseContent(r.Body, &s_lost_password)
+			if err != nil {
+				fmt.Println(err.Error())
+				w.Write([]byte(err.Error()))
+			}
+
+			result := verifyLPToken(s_lost_password)
+
+			resultString, _ := json.Marshal(result)
+
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			w.Write(resultString)
+
+			break
+		case "/ws/changeLP":
+			s_lost_password := s_lost_password_hdr{}
+
+			err := parseContent(r.Body, &s_lost_password)
+			if err != nil {
+				fmt.Println(err.Error())
+				w.Write([]byte(err.Error()))
+			}
+
+			result := changeLPPassword(s_lost_password)
+
+			resultString, _ := json.Marshal(result)
+
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			w.Write(resultString)
+
+			break
+		case "/ws/getBalance":
 			s_balance_request := s_balance_request_hdr{}
 
 			err := parseContent(r.Body, &s_balance_request)
@@ -319,7 +388,7 @@ func main() {
 			w.Write(resultString)
 
 			break
-		case "/getProvider":
+		case "/ws/getProvider":
 			s_provider_request := s_provider_request_hdr{}
 
 			err := parseContent(r.Body, &s_provider_request)
@@ -346,7 +415,7 @@ func main() {
 			w.Write(resultString)
 
 			break
-		case "/transferCredits1":
+		case "/ws/transferCredits1":
 			s_transferCredits_request := s_transferCredits_request_hdr{}
 
 			err := parseContent(r.Body, &s_transferCredits_request)
@@ -373,7 +442,7 @@ func main() {
 			w.Write(resultString)
 
 			break
-		case "/transferCredits2":
+		case "/ws/transferCredits2":
 			s_transferCredits_request := s_transferCredits_request_hdr{}
 
 			err := parseContent(r.Body, &s_transferCredits_request)
@@ -401,7 +470,7 @@ func main() {
 
 			break
 
-		case "/createBill":
+		case "/ws/createBill":
 			s_createBill_request := s_createBill_request_hdr{}
 
 			err := parseContent(r.Body, &s_createBill_request)
@@ -424,7 +493,7 @@ func main() {
 			w.Write(resultString)
 
 			break
-		case "/createAccount":
+		case "/ws/createAccount":
 			s_login_create_request := s_login_create_request_hdr{}
 
 			err := parseContent(r.Body, &s_login_create_request)
@@ -447,7 +516,7 @@ func main() {
 			w.Write(resultString)
 
 			break
-		case "/getBoletoImage":
+		case "/ws/getBoletoImage":
 			s_getBill_request := s_getBill_request_hdr{}
 
 			err := parseContent(r.Body, &s_getBill_request)
@@ -840,6 +909,8 @@ func activateAccount(s_request s_activate_request_hdr) (result s_status, err err
 
 		db.InsertToken(dbConn, id, s_request.AuthToken)
 
+		redis.Del(s_request.AuthToken)
+
 	} else {
 		result.Status = "failed"
 		result.StatusCode = 0
@@ -879,4 +950,90 @@ func transferCredits2(s_transferCredits_request s_transferCredits_request_hdr) (
 		s_transferCredits_response.ErrorMessage = "Login/Senha inválido"
 	}
 	return s_transferCredits_response, nil
+}
+func lostPassword(s_lost_password s_lost_password_hdr) {
+	recoverToken := random.RandomString(64)
+
+	s_redis := s_redis_lost_password_hdr{}
+	s_redis.Email = s_lost_password.Email
+	s_redis.RecoverToken = recoverToken
+
+	redisString, _ := json.Marshal(s_redis)
+	redis.Set(s_redis.Email, string(redisString), 10*time.Minute)
+
+	notification.Send(notification.NotificationMessage{"email", s_lost_password.Email, "\n\nhttp://ec2-54-207-24-178.sa-east-1.compute.amazonaws.com/password/#/password/" + s_lost_password.Email + "/" + recoverToken})
+
+}
+func changeLPPassword(s_lost_password s_lost_password_hdr) (result s_status) {
+	defer func() {
+		if r := recover(); r != nil {
+			result.Status = "failed"
+			result.StatusCode = 0
+			result.ErrorMessage = "AuthToken invalido"
+		}
+	}()
+	salt := random.RandomString(32)
+	s_redis_lost_password := s_redis_lost_password_hdr{}
+
+	redisString, err := redis.Get(s_lost_password.Email)
+
+	if err != nil || redisString == nil {
+		return s_status{"failed", "Token não encontrado", 404}
+	}
+	err = json.Unmarshal([]byte(*redisString), &s_redis_lost_password)
+	if err != nil {
+		panic(err)
+	}
+	if s_redis_lost_password.RecoverToken != s_lost_password.RecoveryToken {
+		return s_status{"failed", "Token não encontrado", 404}
+	}
+
+	dk, err := scrypt.Key([]byte(s_lost_password.Password), []byte(salt), 16384, 8, 1, 32)
+	if err != nil {
+		return s_status{"failed", "Internal server Error", 500}
+	}
+	dkb64Encoded := b64.StdEncoding.EncodeToString([]byte(dk))
+
+	dbConn := db.Connect()
+	defer dbConn.Close()
+	db.ChangePassword(dbConn, s_redis_lost_password.Email, dkb64Encoded, salt)
+
+	redis.Del(s_lost_password.Email)
+
+	return s_status{"success", "", 0}
+
+}
+
+func verifyLPToken(s_lost_password s_lost_password_hdr) (result s_status) {
+	defer func() {
+		if r := recover(); r != nil {
+			result.Status = "failed"
+			result.StatusCode = 0
+			result.ErrorMessage = "AuthToken invalido"
+		}
+	}()
+
+	s_redis_lost_password := s_redis_lost_password_hdr{}
+
+	redisString, err := redis.Get(s_lost_password.Email)
+	if err != nil {
+		panic(err)
+	}
+	if redisString != nil {
+		return s_status{"success", "", 0}
+	} else {
+		return s_status{"failed", "Token não encontrado", 404}
+
+	}
+
+	err = json.Unmarshal([]byte(*redisString), &s_redis_lost_password)
+	if err != nil {
+		panic(err)
+	}
+	if s_redis_lost_password.RecoverToken != s_lost_password.RecoveryToken {
+		return s_status{"failed", "Token não encontrado", 404}
+	}
+
+	return s_status{"success", "", 0}
+
 }
