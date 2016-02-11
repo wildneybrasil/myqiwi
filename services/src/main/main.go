@@ -239,6 +239,25 @@ func main() {
 			w.Write(resultString)
 
 			break
+		case "/ws/resendActivationCode":
+			s_activate_request := s_activate_request_hdr{}
+
+			err := parseContent(r.Body, &s_activate_request)
+			if err != nil {
+				fmt.Println(err.Error())
+				w.Write([]byte(err.Error()))
+			}
+
+			result, err := resendActivationCode(s_activate_request)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			resultString, _ := json.Marshal(result)
+			w.Write(resultString)
+
+			break
+
 		case "/ws/activateGETAccount":
 			//	db.CreateAccount(dbConn, s_login_create_request.Email, s_login_create_request.Cel, dkb64Encoded, salt, s_login_create_request.Name)
 
@@ -879,7 +898,7 @@ func activateAccount(s_request s_activate_request_hdr) (result s_status, err err
 	defer func() {
 		if r := recover(); r != nil {
 			result.Status = "failed"
-			result.StatusCode = 0
+			result.StatusCode = 404
 			result.ErrorMessage = "AuthToken invalido"
 			err = nil
 		}
@@ -913,9 +932,43 @@ func activateAccount(s_request s_activate_request_hdr) (result s_status, err err
 
 	} else {
 		result.Status = "failed"
-		result.StatusCode = 0
+		result.StatusCode = 404
 		result.ErrorMessage = "Código de ativação invalido"
 	}
+	return result, nil
+}
+
+func resendActivationCode(s_request s_activate_request_hdr) (result s_status, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			result.Status = "failed"
+			result.StatusCode = 404
+			result.ErrorMessage = "AuthToken invalido"
+			err = nil
+		}
+	}()
+
+	dbConn := db.Connect()
+
+	defer dbConn.Close()
+
+	s_redis := s_redis_create_account_hdr{}
+
+	redisString, err := redis.Get(s_request.AuthToken)
+	if err != nil {
+		panic(err)
+	}
+	err = json.Unmarshal([]byte(*redisString), &s_redis)
+	if err != nil {
+		panic(err)
+	}
+
+	redisBytes, _ := json.Marshal(s_redis)
+
+	redis.Set(s_redis.AuthToken, string(redisBytes), 10*time.Minute)
+
+	notification.Send(notification.NotificationMessage{"sms", s_redis.Cel, "QIWI - Seu codigo de ativação é: " + s_redis.ActivationCode})
+
 	return result, nil
 }
 
