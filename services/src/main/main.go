@@ -82,12 +82,15 @@ type s_balance_response_hdr struct {
 }
 type s_transferCredits_request_hdr struct {
 	AuthToken string `json:"authToken"`
-	Amount    string `json:"amount"`
-	Account   string `json:"account"`
-	Terminal  string `json:"terminal"`
-	Service   string `json:"service"`
+	Rcpt      string `json:"rcpt"`
 	Id        string `json:"id"`
-	session   string `json:"session"`
+	Session   string `json:"session"`
+	Amount    string `json:"amount"`
+}
+type s_boletoInfo_request_hdr struct {
+	AuthToken string `json:"authToken"`
+	Boleto    string `json:"boleto"`
+	Scanned   string `json:"scanned"`
 }
 
 type s_createBill_request_hdr struct {
@@ -149,14 +152,35 @@ type s_values_item_hdr struct {
 type s_values_response_hdr struct {
 	Items []s_values_item_hdr `json:"items,omitempty"`
 }
+type s_transferCredits_response_data_hdr struct {
+	Session  string                `json:"session,omitempty"`
+	Id       string                `json:"id,omitempty"`
+	Nominals s_values_response_hdr `json:"nominals,omitempty"`
+}
+type s_boletoResponse_data_hdr struct {
+	Cedente    string `json:"cendente,omitempty"`
+	Expiration string `json:"validate,omitempty"`
+	Amount     string `json:"amount,omitempty"`
+	Diff       string `json:"diff,omitempty"`
+	Flag       string `json:"flag,omitempty"`
+	Session    string `json:"session,omitempty"`
+	Id         string `json:"id,omitempty"`
+}
+type s_boletoResponse_hdr struct {
+	s_status
+	Data s_boletoResponse_data_hdr `json:"data,omitempty"`
+}
 type s_transferCredits_response_hdr struct {
 	s_status
-	Nominals s_values_response_hdr `json:"nominals,omitempty"`
+	Data s_transferCredits_response_data_hdr `json:"data,omitempty"`
+}
+type s_transferCredits2_response_data_hdr struct {
+	Voucher string `json:"voucher,omitempty"`
+	Amount  string `json:"amount,omitempty"`
 }
 type s_transferCredits2_response_hdr struct {
 	s_status
-	Voucher string `json:"voucher,omitempty"`
-	Amount  string `json:"amount,omitempty"`
+	Data s_transferCredits2_response_data_hdr `json:"data,omitempty"`
 }
 
 type s_status struct {
@@ -417,6 +441,33 @@ func main() {
 			}
 
 			s_result, err := getProvider(s_provider_request)
+			if err != nil {
+				fmt.Println(err)
+
+				resultString, _ := json.Marshal(s_status{"failed", "System error", 500})
+				w.Write(resultString)
+
+				return
+			}
+			resultString, err := json.Marshal(s_result)
+
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			w.Write(resultString)
+
+			break
+		case "/ws/getBoletoInfo":
+			s_boletoInfo_request := s_boletoInfo_request_hdr{}
+
+			err := parseContent(r.Body, &s_boletoInfo_request)
+			if err != nil {
+				fmt.Println(err.Error())
+				w.Write([]byte(err.Error()))
+			}
+
+			s_result, err := getBoletoInfo(s_boletoInfo_request)
 			if err != nil {
 				fmt.Println(err)
 
@@ -867,9 +918,11 @@ func transferCredits1(s_transferCredits_request s_transferCredits_request_hdr) (
 
 	defer dbConn.Close()
 
+	s_rcpt_info, err := db.GetLoginInfoByCel(dbConn, s_transferCredits_request.Rcpt)
+
 	s_login_credentials, err := db.GetAuthToken(dbConn, s_transferCredits_request.AuthToken)
 	if err == nil && s_login_credentials.Id > 0 {
-		transferResponse, err := ws.TransferCredits1(s_login_credentials, s_transferCredits_request.Account, s_transferCredits_request.Terminal, s_transferCredits_request.Service, s_transferCredits_request.Amount)
+		transferResponse, err := ws.TransferCredits1(s_login_credentials, s_rcpt_info.Cel, s_rcpt_info.TerminalId, "15695", "1")
 		if err != nil {
 			s_transferCredits_response.StatusCode = 500
 			s_transferCredits_response.ErrorMessage = "Internal server error"
@@ -885,14 +938,83 @@ func transferCredits1(s_transferCredits_request s_transferCredits_request_hdr) (
 				item.Amount = V1[k]
 				item.Id = V3[k]
 
-				s_transferCredits_response.Nominals.Items = append(s_transferCredits_response.Nominals.Items, item)
+				s_transferCredits_response.Data.Nominals.Items = append(s_transferCredits_response.Data.Nominals.Items, item)
 			}
+			s_transferCredits_response.Data.Session = transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp4
+			s_transferCredits_response.Data.Id = transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Id
 		}
 	} else {
 		s_transferCredits_response.StatusCode = 403
 		s_transferCredits_response.ErrorMessage = "Login/Senha inválido"
 	}
 	return s_transferCredits_response, nil
+}
+func getBoletoInfo(s_boletoInfo_request s_boletoInfo_request_hdr) (s_boletoResponse s_boletoResponse_hdr, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("PANIC - ", r)
+
+			err = fmt.Errorf("panic")
+		}
+	}()
+
+	dbConn := db.Connect()
+
+	defer dbConn.Close()
+
+	s_login_credentials, err := db.GetAuthToken(dbConn, s_boletoInfo_request.AuthToken)
+	if err == nil && s_login_credentials.Id > 0 {
+		transferResponse, err := ws.GetBoletoInfo(s_login_credentials, s_boletoInfo_request.Boleto, s_login_credentials.Cel, s_boletoInfo_request.Scanned)
+		if err != nil {
+			s_boletoResponse.StatusCode = 500
+			s_boletoResponse.ErrorMessage = "Internal server error"
+		} else {
+			boletoInfo := transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp2
+			if boletoInfo != "" {
+				boletoMetadata := strings.Split(boletoInfo, "|")
+
+				if len(boletoMetadata) == 2 {
+					s_boletoResponse.Data.Cedente = boletoMetadata[0]
+					s_boletoResponse.Data.Amount = boletoMetadata[1]
+				}
+				if len(boletoMetadata) == 4 {
+					s_boletoResponse.Data.Cedente = boletoMetadata[0]
+					s_boletoResponse.Data.Expiration = boletoMetadata[1]
+					s_boletoResponse.Data.Amount = boletoMetadata[2]
+					s_boletoResponse.Data.Diff = boletoMetadata[3]
+				}
+				if len(boletoMetadata) == 3 {
+					s_boletoResponse.Data.Cedente = boletoMetadata[0]
+					s_boletoResponse.Data.Expiration = boletoMetadata[1]
+					s_boletoResponse.Data.Amount = boletoMetadata[2]
+				}
+			}
+			disp3 := transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp3
+
+			if disp3 != "" {
+				flags := strings.Split(disp3, "|")
+				errorMessage := ""
+
+				if len(flags) > 1 {
+					s_boletoResponse.Data.Flag = flags[0]
+					errorMessage = flags[1]
+				} else {
+					s_boletoResponse.Data.Flag = disp3
+				}
+				if s_boletoResponse.Data.Flag == "false" {
+					s_boletoResponse.Status = "failed"
+					s_boletoResponse.StatusCode = 400
+					s_boletoResponse.ErrorMessage = errorMessage
+				}
+			}
+			s_boletoResponse.Data.Session = transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp1
+			s_boletoResponse.Data.Id = transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Id
+		}
+	} else {
+		s_boletoResponse.StatusCode = 403
+		s_boletoResponse.ErrorMessage = "Login/Senha inválido"
+	}
+	return s_boletoResponse, nil
 }
 func activateAccount(s_request s_activate_request_hdr) (result s_status, err error) {
 	defer func() {
@@ -939,14 +1061,14 @@ func activateAccount(s_request s_activate_request_hdr) (result s_status, err err
 }
 
 func resendActivationCode(s_request s_activate_request_hdr) (result s_status, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			result.Status = "failed"
-			result.StatusCode = 404
-			result.ErrorMessage = "AuthToken invalido"
-			err = nil
-		}
-	}()
+	//	defer func() {
+	//		if r := recover(); r != nil {
+	//			result.Status = "failed"
+	//			result.StatusCode = 404
+	//			result.ErrorMessage = "AuthToken invalido"
+	//			err = nil
+	//		}
+	//	}()
 
 	dbConn := db.Connect()
 
@@ -954,10 +1076,13 @@ func resendActivationCode(s_request s_activate_request_hdr) (result s_status, er
 
 	s_redis := s_redis_create_account_hdr{}
 
+	fmt.Println("AT" + s_request.AuthToken)
 	redisString, err := redis.Get(s_request.AuthToken)
 	if err != nil {
 		panic(err)
 	}
+	fmt.Println("REDIS" + *redisString)
+
 	err = json.Unmarshal([]byte(*redisString), &s_redis)
 	if err != nil {
 		panic(err)
@@ -965,7 +1090,7 @@ func resendActivationCode(s_request s_activate_request_hdr) (result s_status, er
 
 	redisBytes, _ := json.Marshal(s_redis)
 
-	redis.Set(s_redis.AuthToken, string(redisBytes), 10*time.Minute)
+	redis.Set(s_redis.AuthToken, string(redisBytes), 1000*time.Minute)
 
 	notification.Send(notification.NotificationMessage{"sms", s_redis.Cel, "QIWI - Seu codigo de ativação é: " + s_redis.ActivationCode})
 
@@ -973,13 +1098,13 @@ func resendActivationCode(s_request s_activate_request_hdr) (result s_status, er
 }
 
 func transferCredits2(s_transferCredits_request s_transferCredits_request_hdr) (s_transferCredits_response s_transferCredits2_response_hdr, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Println("PANIC - ", r)
+	//	defer func() {
+	//		if r := recover(); r != nil {
+	//			fmt.Println("PANIC - ", r)
 
-			err = fmt.Errorf("panic")
-		}
-	}()
+	//			err = fmt.Errorf("panic")
+	//		}
+	//	}()
 
 	s_transferCredits_response = s_transferCredits2_response_hdr{}
 
@@ -989,14 +1114,33 @@ func transferCredits2(s_transferCredits_request s_transferCredits_request_hdr) (
 
 	s_login_credentials, err := db.GetAuthToken(dbConn, s_transferCredits_request.AuthToken)
 	if err == nil && s_login_credentials.Id > 0 {
-		transferResponse, err := ws.TransferCredits2(s_login_credentials, s_transferCredits_request.Id, s_transferCredits_request.session, s_transferCredits_request.Account, s_transferCredits_request.Terminal, s_transferCredits_request.Service, s_transferCredits_request.Amount)
+		s_rcpt, err := db.GetLoginInfoByCel(dbConn, s_transferCredits_request.Rcpt)
 		if err != nil {
 			s_transferCredits_response.StatusCode = 500
 			s_transferCredits_response.ErrorMessage = "Internal server error"
 		} else {
-			fmt.Println(transferResponse.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLVoucher.Code)
-			s_transferCredits_response.Voucher = transferResponse.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLVoucher.Code
-			s_transferCredits_response.Amount = transferResponse.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLVoucher.Amount
+			transferResponse, err := ws.TransferCredits2(s_login_credentials, s_transferCredits_request.Id, s_transferCredits_request.Session, s_rcpt.Cel, s_rcpt.TerminalId, "	", s_transferCredits_request.Amount)
+			if err != nil {
+				s_transferCredits_response.StatusCode = 500
+				s_transferCredits_response.ErrorMessage = "Internal server error"
+			} else {
+				if transferResponse.XMLProvider.XMLPurchaseOnline != nil {
+					if transferResponse.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLVoucher != nil {
+						fmt.Println(transferResponse.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLVoucher.Code)
+						s_transferCredits_response.Data.Voucher = transferResponse.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLVoucher.Code
+						s_transferCredits_response.Data.Amount = transferResponse.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLVoucher.Amount
+					}
+					if transferResponse.XMLProvider.XMLPurchaseOnline.XMLPayment.Result != "0" {
+						s_transferCredits_response.StatusCode = 400
+						s_transferCredits_response.ErrorMessage = "Erro na transferencia"
+
+					}
+				} else {
+					s_transferCredits_response.StatusCode = 500
+					s_transferCredits_response.ErrorMessage = "Internal server error"
+
+				}
+			}
 		}
 	} else {
 		s_transferCredits_response.StatusCode = 403
@@ -1012,7 +1156,7 @@ func lostPassword(s_lost_password s_lost_password_hdr) {
 	s_redis.RecoverToken = recoverToken
 
 	redisString, _ := json.Marshal(s_redis)
-	redis.Set(s_redis.Email, string(redisString), 10*time.Minute)
+	redis.Set(s_redis.Email, string(redisString), 1000*time.Minute)
 
 	notification.Send(notification.NotificationMessage{"email", s_lost_password.Email, "\n\nhttp://ec2-54-207-24-178.sa-east-1.compute.amazonaws.com/password/#/password/" + s_lost_password.Email + "/" + recoverToken})
 

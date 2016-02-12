@@ -15,6 +15,7 @@ type Login_credentials_hdr struct {
 	TerminalSerial   string
 	TerminalPassword string
 	TerminalLogin    string
+	Cel              string
 	Password         string
 	PasswordSalt     string
 	FailedLoginCount int
@@ -104,7 +105,6 @@ func ResetFailedLoginOfEmail(db *sql.DB, email string) error {
 		return err
 	}
 	return nil
-
 }
 func ActivateUser(db *sql.DB, token string) error {
 	stmt, err := db.Prepare(`update user_credentials set status = 1 where password_salt=$1`)
@@ -171,6 +171,23 @@ func GetLoginInfoByEmail(db *sql.DB, username string) (*Login_credentials_hdr, e
 	}
 	return &s_login_credentials, nil
 }
+func GetLoginInfoByCel(db *sql.DB, cel string) (*Login_credentials_hdr, error) {
+	stmt, err := db.Prepare("select  id, password, password_salt, terminal_login, terminal_id , terminal_serial, terminal_password, login_failed_count, status, cel  from user_credentials where cel=$1")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer stmt.Close()
+
+	s_login_credentials := Login_credentials_hdr{}
+
+	err = stmt.QueryRow(cel).Scan(&s_login_credentials.Id, &s_login_credentials.Password, &s_login_credentials.PasswordSalt, &s_login_credentials.TerminalLogin, &s_login_credentials.TerminalId, &s_login_credentials.TerminalSerial, &s_login_credentials.TerminalPassword, &s_login_credentials.FailedLoginCount, &s_login_credentials.Status, &s_login_credentials.Cel)
+
+	if err != nil {
+		fmt.Println(err.Error())
+		return nil, err
+	}
+	return &s_login_credentials, nil
+}
 func GetLoginInfoBySalt(db *sql.DB, token string) (*Login_credentials_hdr, error) {
 	stmt, err := db.Prepare("select  id, terminal_login, terminal_id , terminal_serial, terminal_password  from user_credentials where password_salt=$1")
 	if err != nil {
@@ -206,14 +223,14 @@ func LoginUsername(db *sql.DB, username string, password string) (*Login_credent
 	return &s_login_credentials, nil
 }
 func LoginCel(db *sql.DB, cel string, password string) (*Login_credentials_hdr, error) {
-	stmt, err := db.Prepare("select  id, terminal_login, terminal_id , terminal_serial ,terminal_password from user_credentials where cel=$1 and password=$2")
+	stmt, err := db.Prepare("select  id, terminal_login, terminal_id , terminal_serial ,terminal_password,cel from user_credentials where cel=$1 and password=$2")
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer stmt.Close()
 
 	s_login_credentials := Login_credentials_hdr{}
-	err = stmt.QueryRow(cel, password).Scan(&s_login_credentials.Id, &s_login_credentials.TerminalLogin, &s_login_credentials.TerminalId, &s_login_credentials.TerminalSerial, &s_login_credentials.TerminalPassword)
+	err = stmt.QueryRow(cel, password).Scan(&s_login_credentials.Id, &s_login_credentials.TerminalLogin, &s_login_credentials.TerminalId, &s_login_credentials.TerminalSerial, &s_login_credentials.TerminalPassword, &s_login_credentials.Cel)
 
 	if err != nil {
 		fmt.Println(err)
@@ -225,13 +242,13 @@ func GetAuthToken(db *sql.DB, authToken string) (*Login_credentials_hdr, error) 
 	s_login_credentials := Login_credentials_hdr{}
 	fmt.Println("AUTH" + authToken)
 
-	stmt, err := db.Prepare("select  u.id, u.terminal_login, u.terminal_id , u.terminal_serial,terminal_password from user_tokens t, user_credentials u where t.user_credential_id=u.id and t.token=$1 and u.status=1")
+	stmt, err := db.Prepare("select  u.id, u.terminal_login, u.terminal_id , u.terminal_serial,terminal_password ,cel from user_tokens t, user_credentials u where t.user_credential_id=u.id and t.token=$1 and u.status=1")
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer stmt.Close()
 
-	err = stmt.QueryRow(authToken).Scan(&s_login_credentials.Id, &s_login_credentials.TerminalLogin, &s_login_credentials.TerminalId, &s_login_credentials.TerminalSerial, &s_login_credentials.TerminalPassword)
+	err = stmt.QueryRow(authToken).Scan(&s_login_credentials.Id, &s_login_credentials.TerminalLogin, &s_login_credentials.TerminalId, &s_login_credentials.TerminalSerial, &s_login_credentials.TerminalPassword, &s_login_credentials.Cel)
 
 	if err != nil {
 		fmt.Println(err)

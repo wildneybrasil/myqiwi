@@ -75,11 +75,16 @@ type s_XMLPaymentReceipt struct {
 	Id   string `xml:"id,attr,omitempty"`
 }
 type s_XMLPaymentExtras struct {
-	Ev_id    string `xml:"ev_id,attr,omitempty"`
-	Ev_isWeb string `xml:"ev_isWeb,attr,omitempty"`
-	Disp1    string `xml:"disp1,attr,omitempty"`
-	Disp2    string `xml:"disp2,attr,omitempty"`
-	Disp3    string `xml:"disp3,attr,omitempty"`
+	Ev_id      string `xml:"ev_id,attr,omitempty"`
+	Ev_isWeb   string `xml:"ev_isWeb,attr,omitempty"`
+	Ev_ipte    string `xml:"ev_ipte,attr,omitempty"`
+	Ev_isnom   string `xml:"ev_isnom,attr,omitempty"`
+	Ev_reqtype string `xml:"ev_reqtype,attr,omitempty"`
+	Ev_scan    string `xml:"ev_scan,attr,omitempty"`
+	Disp1      string `xml:"disp1,attr,omitempty"`
+	Disp2      string `xml:"disp2,attr,omitempty"`
+	Disp3      string `xml:"disp3,attr,omitempty"`
+	Disp4      string `xml:"disp4,attr,omitempty"`
 
 	Ev_exact_amount      string `xml:"ev_exact_amount,attr,omitempty"`
 	Ev_session_guid      string `xml:"ev_session_guid,attr,omitempty"`
@@ -93,6 +98,8 @@ type s_XMLVoucher struct {
 type s_XMLPayment struct {
 	Id                string              `xml:"id,attr,omitempty"`
 	Comment           string              `xml:"comment,attr,omitempty"`
+	Result            string              `xml:"result,attr,omitempty"`
+	Status            string              `xml:"status,attr,omitempty"`
 	XMLPaymentFrom    s_XMLPaymentFrom    `xml:"from,omitempty"`
 	XMLPaymentTo      s_XMLPaymentTo      `xml:"to,omitempty"`
 	XMLPaymentReceipt s_XMLPaymentReceipt `xml:"receipt,omitempty"`
@@ -390,6 +397,8 @@ func TransferCredits2(s_credentials *db.Login_credentials_hdr, id string, sessio
 
 	//	fmt.Println(result)
 
+	s_response_createBill.XMLProvider.XMLPurchaseOnline = &s_XMLPurchaseOnline{}
+
 	if err := xml.NewDecoder(strings.NewReader(*result)).Decode(&s_response_createBill); err != nil {
 		return nil, err
 	}
@@ -409,6 +418,48 @@ func GetLastID(s_credentials *db.Login_credentials_hdr) (*WSResponse_lastGetID_h
 	if err != nil {
 		return nil, err
 	}
+
+	if err := xml.NewDecoder(strings.NewReader(*result)).Decode(&s_response_createBill); err != nil {
+		return nil, err
+	}
+
+	return &s_response_createBill, nil
+}
+func GetBoletoInfo(s_credentials *db.Login_credentials_hdr, boleto string, fromAccount string, scanned string) (*WSResponse_transferCredits_hdr, error) {
+	fmt.Println("GET CREATE BILL")
+
+	s_response_createBill := WSResponse_transferCredits_hdr{}
+
+	currentDate := arrow.Now().CFormat("%Y-%m-%dT%H:%M:%S")
+
+	lastId, _ := GetLastID(s_credentials)
+	currentId, _ := strconv.ParseInt(lastId.XMLTerminals.XMLGetLastIds.XMLLastPayment.Id, 10, 0)
+	currentId = currentId + 1
+
+	requestType := s_request_data{}
+	requestType.XMLProvider = &s_XMLProvider_hdr{}
+	requestType.XMLProvider.XMLCheckPaymentRequisites = &s_XMLCheckPaymentRequisites{}
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Id = strconv.Itoa(int(currentId))
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentFrom.Amount = "1"
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentFrom.Currency = "986"
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentTo.Amount = "1"
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentTo.Currency = "986"
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentTo.Account = fromAccount
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentTo.Service = "151022"
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentReceipt.Date = currentDate
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentReceipt.Id = strconv.Itoa(int(currentId))
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_isWeb = "1"
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_ipte = boleto
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_isnom = "1"
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_reqtype = "2"
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_scan = scanned
+
+	result, err := send(s_credentials, &requestType)
+	if err != nil {
+		return nil, err
+	}
+
+	//	fmt.Println(result)
 
 	if err := xml.NewDecoder(strings.NewReader(*result)).Decode(&s_response_createBill); err != nil {
 		return nil, err
