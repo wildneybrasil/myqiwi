@@ -26,6 +26,7 @@ type Services_hdr struct {
 	Name      string
 	LongName  string
 	ServicoId int
+	RvId      string
 }
 
 func Connect() *sql.DB {
@@ -270,7 +271,7 @@ func FindServiceByLongName(services *[]Services_hdr, longName string) *Services_
 func ListServicos(db *sql.DB) (*[]Services_hdr, error) {
 	result := make([]Services_hdr, 0)
 
-	stmt, err := db.Prepare("select i.longName, s.name from servicos s, servicos_items i where i.servico_id=s.id")
+	stmt, err := db.Prepare("select i.longName, i.rv_id, s.name from servicos s, servicos_items i where i.servico_id=s.id")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -284,7 +285,7 @@ func ListServicos(db *sql.DB) (*[]Services_hdr, error) {
 	}
 	for rows.Next() {
 		item := Services_hdr{}
-		err = rows.Scan(&item.LongName, &item.Name)
+		err = rows.Scan(&item.LongName, &item.RvId, &item.Name)
 		if err != nil {
 			return nil, err
 		}
