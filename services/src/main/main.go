@@ -72,6 +72,52 @@ func main() {
 			w.Write(resultString)
 
 			break
+		case "/ws/accountInfo":
+			s_cel_info := s_cel_info_hdr{}
+
+			err := parseContent(r.Body, &s_cel_info)
+			if err != nil {
+				fmt.Println(err.Error())
+				w.Write([]byte(err.Error()))
+			}
+
+			s_result, err := getPublicLoginInfoByCel(s_cel_info)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			resultString, err := json.Marshal(s_result)
+
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			w.Write(resultString)
+
+			break
+		case "/ws/getHistory":
+			s_history_request := s_history_request_hdr{}
+
+			err := parseContent(r.Body, &s_history_request)
+			if err != nil {
+				fmt.Println(err.Error())
+				w.Write([]byte(err.Error()))
+			}
+
+			s_result, err := getHistoryOfUser(s_history_request)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			resultString, err := json.Marshal(s_result)
+
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			w.Write(resultString)
+
+			break
 		case "/ws/activateAccount":
 			s_activate_request := s_activate_request_hdr{}
 
@@ -390,6 +436,63 @@ func main() {
 			w.Write(resultString)
 
 			break
+
+		case "/ws/pay1":
+			s_payment_request := s_payment_request_hdr{}
+
+			err := parseContent(r.Body, &s_payment_request)
+			if err != nil {
+				fmt.Println(err.Error())
+				w.Write([]byte(err.Error()))
+			}
+
+			s_result, err := payment1(s_payment_request)
+			if err != nil {
+				fmt.Println(err)
+
+				resultString, _ := json.Marshal(s_status{"failed", "System error", 500})
+				w.Write(resultString)
+
+				return
+			}
+			resultString, err := json.Marshal(s_result)
+
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			w.Write(resultString)
+
+			break
+
+		case "/ws/pay2":
+			s_payment_request := s_payment_request_hdr{}
+
+			err := parseContent(r.Body, &s_payment_request)
+			if err != nil {
+				fmt.Println(err.Error())
+				w.Write([]byte(err.Error()))
+			}
+
+			s_result, err := payment2(s_payment_request)
+			if err != nil {
+				fmt.Println(err)
+
+				resultString, _ := json.Marshal(s_status{"failed", "System error", 500})
+				w.Write(resultString)
+
+				return
+			}
+			resultString, err := json.Marshal(s_result)
+
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			w.Write(resultString)
+
+			break
+
 		case "/ws/createAccount":
 			s_login_create_request := s_login_create_request_hdr{}
 

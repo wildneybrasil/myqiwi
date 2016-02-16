@@ -10,6 +10,9 @@ import (
 type s_provider_request_hdr struct {
 	AuthToken string `json:"authToken"`
 }
+type s_history_request_hdr struct {
+	AuthToken string `json:"authToken"`
+}
 type s_provider_response_row_hdr struct {
 	FiscalName  string `json:"fiscalName"`
 	LongName    string `json:"longName"`
@@ -19,6 +22,7 @@ type s_provider_response_row_hdr struct {
 }
 type s_provider_response_service_hdr struct {
 	ServiceName string                        `json:"serviceName"`
+	Type        string                        `json:"type"`
 	Provider    []s_provider_response_row_hdr `json:"providers"`
 }
 type s_provider_response_data_hdr struct {
@@ -30,6 +34,57 @@ type s_provider_response_hdr struct {
 	Data *s_provider_response_data_hdr `json:"data,omitempty"`
 }
 
+type s_history_data_item_hdr struct {
+	Timestamp    int    `json:"timestamp"`
+	PaymentType  string `json:"paymentType"`
+	CategoryName string `json:"categoryName"`
+	ServiceName  string `json:"serviceName"`
+	Rcpt         string `json:"rcpt"`
+	Amount       string `json:"amount"`
+}
+
+type s_history_response_data_hdr struct {
+	Item []s_history_data_item_hdr `json:"item"`
+}
+type s_history_response_hdr struct {
+	s_status
+	Data s_history_response_data_hdr `json:"data"`
+}
+
+func getHistoryOfUser(s_history_request s_history_request_hdr) (s_history_response_hdr, error) {
+	dbConn := db.Connect()
+	defer dbConn.Close()
+
+	s_history_response := s_history_response_hdr{}
+
+	s_login_credentials, err := db.GetAuthToken(dbConn, s_history_request.AuthToken)
+	if err != nil || s_login_credentials.Id <= 0 {
+		s_history_response.StatusCode = 401
+		s_history_response.ErrorMessage = "Login Invalido"
+
+		return s_history_response, nil
+	}
+	list, err := db.ListHistory(dbConn, s_login_credentials.Id)
+	if err != nil {
+		s_history_response.StatusCode = 500
+		s_history_response.ErrorMessage = "Internal server error"
+
+		return s_history_response, nil
+	}
+
+	for _, v := range *list {
+		item := s_history_data_item_hdr{}
+		item.ServiceName = v.ServiceName
+		item.Timestamp = v.Timestamp
+		item.CategoryName = v.CategoryName
+		item.Rcpt = v.Rcpt
+		item.Amount = v.Amount
+		item.PaymentType = v.PaymentType
+
+		s_history_response.Data.Item = append(s_history_response.Data.Item, item)
+	}
+	return s_history_response, nil
+}
 func getProvider(s_provider_request s_provider_request_hdr) (s_provider_response s_provider_response_hdr, err error) {
 	//	defer func() {
 	//		if r := recover(); r != nil {
@@ -64,6 +119,7 @@ func getProvider(s_provider_request s_provider_request_hdr) (s_provider_response
 				for _, s := range *servicos {
 					if item.PrvId == s.RvId {
 						item.ServiceName = s.Name
+						item.Type = s.Type
 					}
 				}
 			}
@@ -97,7 +153,7 @@ func getProvider(s_provider_request s_provider_request_hdr) (s_provider_response
 					s_service.Provider = providers
 
 					s_service.ServiceName = item.ServiceName
-
+					s_service.Type = item.Type
 					services = append(services, s_service)
 
 				}

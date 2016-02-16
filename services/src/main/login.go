@@ -25,6 +25,7 @@ type s_redis_create_account_hdr struct {
 	Password       string `json:"password"`
 	Name           string `json:"name"`
 	Cel            string `json:"cel"`
+	Photo          string `json:"photo"`
 	Salt           string `json:"salt"`
 	ActivationCode string `json:"activationCode"`
 	AuthToken      string `json:"authToken"`
@@ -33,7 +34,10 @@ type s_redis_lost_password_hdr struct {
 	Email        string `json:"email"`
 	RecoverToken string `json:"recoverToken"`
 }
-
+type s_cel_info_hdr struct {
+	AuthToken string `json:"authToken"`
+	Cel       string `json:"cel"`
+}
 type s_login_request_hdr struct {
 	Email    string `json:"email"`
 	Cel      string `json:"cel"`
@@ -43,11 +47,21 @@ type s_activate_request_hdr struct {
 	AuthToken      string `json:"authToken"`
 	ActivationCode string `json:"activationCode"`
 }
+type s_login_info_response_data_hdr struct {
+	Name  string `json:"name"`
+	Cel   string `json:"cel"`
+	Photo string `json:"photo"`
+}
+type s_login_info_response_hdr struct {
+	s_status
+	Data s_login_info_response_data_hdr `json:"data,omitempty"`
+}
 type s_login_create_request_hdr struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 	Name     string `json:"name"`
 	Cel      string `json:"cel"`
+	Photo    string `json:"photo"`
 }
 type s_login_response_data_hdr struct {
 	AuthToken string `json:"authToken,omitempty"`
@@ -80,8 +94,19 @@ func createLogin(s_login_create_request s_login_create_request_hdr) (s_login_cre
 	dbConn := db.Connect()
 	defer dbConn.Close()
 
+	// verifca se login ja existe
+	vrfyLogin, err := db.GetLoginInfoByEmail(dbConn, s_login_create_request.Email)
+	if vrfyLogin != nil {
+		s_login_create_response.Status = "failed"
+		s_login_create_response.StatusCode = 400
+		s_login_create_response.ErrorMessage = "Email ja cadastrado."
+
+		return s_login_create_response, nil
+	}
+
 	dk, err := scrypt.Key([]byte(s_login_create_request.Password), []byte(salt), 16384, 8, 1, 32)
 	if err != nil {
+		s_login_create_response.Status = "failed"
 		s_login_create_response.StatusCode = 500
 		s_login_create_response.ErrorMessage = "Internal server error"
 
@@ -95,6 +120,7 @@ func createLogin(s_login_create_request s_login_create_request_hdr) (s_login_cre
 	s_redis.Name = s_login_create_request.Name
 	s_redis.Cel = s_login_create_request.Cel
 	s_redis.Email = s_login_create_request.Email
+	s_redis.Photo = s_login_create_request.Photo
 	s_redis.Password = dkb64Encoded
 	s_redis.Salt = salt
 	s_redis.AuthToken = authToken
@@ -110,7 +136,19 @@ func createLogin(s_login_create_request s_login_create_request_hdr) (s_login_cre
 
 	return s_login_create_response, nil
 }
+func CheckPassword(source_password string, hash_password string, salt string) bool {
+	//verifica senha
+	dk, err := scrypt.Key([]byte(source_password), []byte(salt), 16384, 8, 1, 32)
+	if err != nil {
+		return false
+	}
+	dkb64Encoded := b64.StdEncoding.EncodeToString([]byte(dk))
 
+	if dkb64Encoded == hash_password {
+		return true
+	}
+	return false
+}
 func login(s_login_request s_login_request_hdr) (s_login_response s_login_response_hdr, err error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -119,6 +157,15 @@ func login(s_login_request s_login_request_hdr) (s_login_response s_login_respon
 			err = fmt.Errorf("panic")
 		}
 	}()
+
+	if s_login_request.Email == "" || s_login_request.Password == "" {
+		s_login_response.Status = "failed"
+		s_login_response.StatusCode = 403
+		s_login_response.ErrorMessage = "Faltando dados"
+
+		return s_login_response, nil
+	}
+
 	authToken := random.RandomString(64)
 
 	s_login_response = s_login_response_hdr{}
@@ -129,18 +176,21 @@ func login(s_login_request s_login_request_hdr) (s_login_response s_login_respon
 
 	s_login_credentials, err := db.GetLoginInfoByEmail(dbConn, s_login_request.Email)
 	if err != nil {
+		s_login_response.Status = "failed"
 		s_login_response.StatusCode = 403
 		s_login_response.ErrorMessage = "Login/Senha inválido"
 
 		return s_login_response, nil
 	}
 	if s_login_credentials.FailedLoginCount > MAXLOGIN {
+		s_login_response.Status = "failed"
 		s_login_response.StatusCode = 403
 		s_login_response.ErrorMessage = "Tentativas excedidas"
 
 		return s_login_response, nil
 	}
 	if s_login_credentials.Status == 0 {
+		s_login_response.Status = "failed"
 		s_login_response.StatusCode = 403
 		s_login_response.ErrorMessage = "Usuario não ativado"
 
@@ -149,6 +199,7 @@ func login(s_login_request s_login_request_hdr) (s_login_response s_login_respon
 
 	dk, err := scrypt.Key([]byte(s_login_request.Password), []byte(s_login_credentials.PasswordSalt), 16384, 8, 1, 32)
 	if err != nil {
+		s_login_response.Status = "failed"
 		s_login_response.StatusCode = 403
 		s_login_response.ErrorMessage = "Login/Senha inválido."
 
@@ -167,6 +218,7 @@ func login(s_login_request s_login_request_hdr) (s_login_response s_login_respon
 	} else {
 		db.IncreaseFailedLoginOfEmail(dbConn, s_login_request.Email)
 
+		s_login_response.Status = "failed"
 		s_login_response.StatusCode = 403
 		s_login_response.ErrorMessage = "Login/Senha inválido"
 
@@ -184,6 +236,13 @@ func activateAccount(s_request s_activate_request_hdr) (result s_status, err err
 			err = nil
 		}
 	}()
+	if s_request.ActivationCode == "" || s_request.AuthToken == "" {
+		result.Status = "failed"
+		result.StatusCode = 403
+		result.ErrorMessage = "Faltando dados"
+
+		return result, nil
+	}
 
 	dbConn := db.Connect()
 
@@ -200,7 +259,7 @@ func activateAccount(s_request s_activate_request_hdr) (result s_status, err err
 		panic(err)
 	}
 	if s_request.ActivationCode == s_redis.ActivationCode {
-		id, err := db.CreateAccount(dbConn, s_redis.Email, s_redis.Cel, s_redis.Password, s_redis.Salt, s_redis.Name)
+		id, err := db.CreateAccount(dbConn, s_redis.Email, s_redis.Cel, s_redis.Password, s_redis.Salt, s_redis.Name, s_redis.Photo)
 		if err != nil {
 			panic(err)
 		}
@@ -228,6 +287,13 @@ func resendActivationCode(s_request s_activate_request_hdr) (result s_status, er
 	//			err = nil
 	//		}
 	//	}()
+	if s_request.AuthToken == "" {
+		result.Status = "failed"
+		result.StatusCode = 403
+		result.ErrorMessage = "Faltando dados"
+
+		return result, nil
+	}
 
 	dbConn := db.Connect()
 
@@ -277,6 +343,14 @@ func changeLPPassword(s_lost_password s_lost_password_hdr) (result s_status) {
 			result.ErrorMessage = "AuthToken invalido"
 		}
 	}()
+	if s_lost_password.Email == "" || s_lost_password.RecoveryToken == "" || s_lost_password.Password == "" {
+		result.Status = "failed"
+		result.StatusCode = 403
+		result.ErrorMessage = "Faltando dados"
+
+		return result
+	}
+
 	salt := random.RandomString(32)
 	s_redis_lost_password := s_redis_lost_password_hdr{}
 
@@ -317,6 +391,13 @@ func verifyLPToken(s_lost_password s_lost_password_hdr) (result s_status) {
 			result.ErrorMessage = "AuthToken invalido"
 		}
 	}()
+	if s_lost_password.Email == "" || s_lost_password.RecoveryToken == "" {
+		result.Status = "failed"
+		result.StatusCode = 403
+		result.ErrorMessage = "Faltando dados"
+
+		return result
+	}
 
 	s_redis_lost_password := s_redis_lost_password_hdr{}
 
@@ -341,4 +422,72 @@ func verifyLPToken(s_lost_password s_lost_password_hdr) (result s_status) {
 
 	return s_status{"success", "", 0}
 
+}
+
+//func getPublicLoginInfoByEmail(s_cel_info s_cel_info_hdr) (s_balance_response s_balance_response_hdr, err error) {
+//	if s_cel_info.AuthToken == "" || s_cel_info.Cel == "" {
+//		s_login_response.Status = "failed"
+//		s_login_response.StatusCode = 403
+//		s_login_response.ErrorMessage = "Faltando dados"
+
+//		return s_login_response, nil
+//	}
+
+//	s_login_info := s_login_info_response_hdr{}
+
+//	dbConn := db.Connect()
+//	defer dbConn.Close()
+
+//	s_login_credentials, err := db.GetAuthToken(dbConn, s_cel_info.AuthToken)
+//	if err == nil && s_login_credentials.Id > 0 {
+//		dbResult, err := db.GetPublicLoginInfoByCel(dbConn, s_cel_info.Cel)
+//		if err != nil {
+//			s_balance_response.StatusCode = 500
+//			s_balance_response.ErrorMessage = "Internal server error"
+//		} else {
+//			s_balance_response.Status = "success"
+//			s_balance_response.StatusCode = 0
+//			s_login_info.Data.Cel = s_cel_info.Cel
+//			s_login_info.Data.Photo = dbResult.Photo
+//			s_login_info.Data.Name = dbResult.Name
+
+//		}
+//	} else {
+//		s_balance_response.StatusCode = 403
+//		s_balance_response.ErrorMessage = "Login/Senha inválido"
+//	}
+//	return s_balance_response, nil
+//}
+func getPublicLoginInfoByCel(s_cel_info s_cel_info_hdr) (s_balance_response s_balance_response_hdr, err error) {
+	if s_cel_info.AuthToken == "" || s_cel_info.Cel == "" {
+		s_balance_response.Status = "failed"
+		s_balance_response.StatusCode = 403
+		s_balance_response.ErrorMessage = "Faltando dados"
+
+		return s_balance_response, nil
+	}
+	s_login_info := s_login_info_response_hdr{}
+
+	dbConn := db.Connect()
+	defer dbConn.Close()
+
+	s_login_credentials, err := db.GetAuthToken(dbConn, s_cel_info.AuthToken)
+	if err == nil && s_login_credentials.Id > 0 {
+		dbResult, err := db.GetPublicLoginInfoByCel(dbConn, s_cel_info.Cel)
+		if err != nil {
+			s_balance_response.StatusCode = 500
+			s_balance_response.ErrorMessage = "Internal server error"
+		} else {
+			s_balance_response.Status = "success"
+			s_balance_response.StatusCode = 0
+			s_login_info.Data.Cel = s_cel_info.Cel
+			s_login_info.Data.Photo = dbResult.Photo
+			s_login_info.Data.Name = dbResult.Name
+
+		}
+	} else {
+		s_balance_response.StatusCode = 403
+		s_balance_response.ErrorMessage = "Login/Senha inválido"
+	}
+	return s_balance_response, nil
 }
