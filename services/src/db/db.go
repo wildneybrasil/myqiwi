@@ -20,17 +20,19 @@ type Login_credentials_hdr struct {
 	Photo            string
 	Name             string
 	Password         string
+	Email            string
 	PasswordSalt     string
 	FailedLoginCount int
 	Status           int
 }
 type Services_hdr struct {
-	Id        int
-	Name      string
-	LongName  string
-	ServicoId int
-	RvId      string
-	Type      string
+	Id          int
+	Name        string
+	LongName    string
+	PaymentType string
+	ServicoId   int
+	RvId        string
+	Type        string
 }
 type History_hdr struct {
 	Id           int
@@ -245,8 +247,8 @@ func GetLoginInfoByEmail(db *sql.DB, email string) (*Login_credentials_hdr, erro
 	}
 	return &s_login_credentials, nil
 }
-func GetLoginInfoByCel(db *sql.DB, cel string) (*Login_credentials_hdr, error) {
-	stmt, err := db.Prepare("select  id, password, password_salt, terminal_login, terminal_id , terminal_serial, terminal_password, login_failed_count, status, cel  from user_credentials where cel=$1")
+func GetLoginInfoById(db *sql.DB, id int) (*Login_credentials_hdr, error) {
+	stmt, err := db.Prepare("select  id, password, password_salt, terminal_login, terminal_id , terminal_serial, terminal_password, login_failed_count, status, cel, email,name  from user_credentials where id=$1")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -254,7 +256,24 @@ func GetLoginInfoByCel(db *sql.DB, cel string) (*Login_credentials_hdr, error) {
 
 	s_login_credentials := Login_credentials_hdr{}
 
-	err = stmt.QueryRow(cel).Scan(&s_login_credentials.Id, &s_login_credentials.Password, &s_login_credentials.PasswordSalt, &s_login_credentials.TerminalLogin, &s_login_credentials.TerminalId, &s_login_credentials.TerminalSerial, &s_login_credentials.TerminalPassword, &s_login_credentials.FailedLoginCount, &s_login_credentials.Status, &s_login_credentials.Cel)
+	err = stmt.QueryRow(id).Scan(&s_login_credentials.Id, &s_login_credentials.Password, &s_login_credentials.PasswordSalt, &s_login_credentials.TerminalLogin, &s_login_credentials.TerminalId, &s_login_credentials.TerminalSerial, &s_login_credentials.TerminalPassword, &s_login_credentials.FailedLoginCount, &s_login_credentials.Status, &s_login_credentials.Cel, &s_login_credentials.Email, &s_login_credentials.Name)
+
+	if err != nil {
+		fmt.Println(err.Error())
+		return nil, err
+	}
+	return &s_login_credentials, nil
+}
+func GetLoginInfoByCel(db *sql.DB, cel string) (*Login_credentials_hdr, error) {
+	stmt, err := db.Prepare("select  id, password, password_salt, terminal_login, terminal_id , terminal_serial, terminal_password, login_failed_count, status, cel,name  from user_credentials where cel=$1")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer stmt.Close()
+
+	s_login_credentials := Login_credentials_hdr{}
+
+	err = stmt.QueryRow(cel).Scan(&s_login_credentials.Id, &s_login_credentials.Password, &s_login_credentials.PasswordSalt, &s_login_credentials.TerminalLogin, &s_login_credentials.TerminalId, &s_login_credentials.TerminalSerial, &s_login_credentials.TerminalPassword, &s_login_credentials.FailedLoginCount, &s_login_credentials.Status, &s_login_credentials.Cel, &s_login_credentials.Name)
 
 	if err != nil {
 		fmt.Println(err.Error())
@@ -383,6 +402,24 @@ func ListServicos(db *sql.DB) (*[]Services_hdr, error) {
 
 		result = append(result, item)
 	}
+	return &result, nil
+}
+func GetServiceByPrid(db *sql.DB, prvId int) (*Services_hdr, error) {
+
+	stmt, err := db.Prepare("select i.longName, i.rv_id, s.name, s.type, i.payment_type from servicos s, servicos_items i where i.servico_id=s.id and i.rv_id=$1")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer stmt.Close()
+
+	result := Services_hdr{}
+	err = stmt.QueryRow(prvId).Scan(&result.LongName, &result.RvId, &result.Name, &result.Type, &result.PaymentType)
+
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
+	}
+
 	return &result, nil
 }
 func ListHistory(db *sql.DB, userId int) (*[]History_hdr, error) {

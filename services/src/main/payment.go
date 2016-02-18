@@ -4,6 +4,7 @@ package main
 import (
 	"db"
 	"fmt"
+	"strconv"
 	"strings"
 	"ws"
 )
@@ -25,6 +26,8 @@ type s_boletoInfo_request_hdr struct {
 	AuthToken string `json:"authToken"`
 	Boleto    string `json:"boleto"`
 	Scanned   string `json:"scanned"`
+	Amount    string `json:"amount"`
+	Service   string `json:"service"`
 }
 
 type s_payment_request_hdr struct {
@@ -33,6 +36,7 @@ type s_payment_request_hdr struct {
 	Service        string `json:"service"`
 	Id             string `json:"id"`
 	Session        string `json:"session"`
+	Boleto         string `json:"boleto"`
 	Amount         string `json:"amount"`
 	Type           string `json:"type"`
 	CardNumber     string `json:"cardNumber"`
@@ -57,6 +61,12 @@ func getBoletoInfo(s_boletoInfo_request s_boletoInfo_request_hdr) (s_boletoRespo
 			err = fmt.Errorf("panic")
 		}
 	}()
+	if s_boletoInfo_request.Service == "" || s_boletoInfo_request.Boleto == "" || s_boletoInfo_request.Scanned == "" {
+		s_boletoResponse.StatusCode = 500
+		s_boletoResponse.ErrorMessage = "Missing type."
+
+		return s_boletoResponse, nil
+	}
 
 	dbConn := db.Connect()
 
@@ -64,13 +74,13 @@ func getBoletoInfo(s_boletoInfo_request s_boletoInfo_request_hdr) (s_boletoRespo
 
 	s_login_credentials, err := db.GetAuthToken(dbConn, s_boletoInfo_request.AuthToken)
 	if err == nil && s_login_credentials.Id > 0 {
-		transferResponse, err := ws.GetBoletoInfo(s_login_credentials, s_boletoInfo_request.Boleto, s_login_credentials.Cel, s_boletoInfo_request.Scanned)
-		if err != nil || transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Status != "0" || transferResponse.XMLProvider.XMLCheckPaymentRequisites.Status != "0" {
+		transferResponse, err := ws.GetBoletoInfo(s_login_credentials, s_boletoInfo_request.Boleto, s_boletoInfo_request.Amount, s_login_credentials.Cel, s_boletoInfo_request.Scanned, s_boletoInfo_request.Service)
+		if err != nil {
 			s_boletoResponse.StatusCode = 500
 			s_boletoResponse.ErrorMessage = "Internal server error"
 			return s_boletoResponse, nil
 		}
-		if transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Status != "0" || transferResponse.XMLProvider.XMLCheckPaymentRequisites.Status != "0" {
+		if transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Result != "0" || transferResponse.XMLProvider.XMLCheckPaymentRequisites.Result != "0" {
 			s_boletoResponse.StatusCode = 400
 			s_boletoResponse.ErrorMessage = "Internal server error"
 			return s_boletoResponse, nil
@@ -133,12 +143,6 @@ func payment1(s_payment_request s_payment_request_hdr) (s_payment_response s_pay
 
 	s_login_credentials, err := db.GetAuthToken(dbConn, s_payment_request.AuthToken)
 	if err == nil && s_login_credentials.Id > 0 {
-		if !CheckPassword(s_payment_request.Password, s_login_credentials.Password, s_login_credentials.PasswordSalt) {
-			s_payment_response.StatusCode = 403
-			s_payment_response.ErrorMessage = "Login/Senha inválido."
-
-			return s_payment_response, nil
-		}
 
 		if s_payment_request.Type == "" {
 			s_payment_response.StatusCode = 500
@@ -151,12 +155,12 @@ func payment1(s_payment_request s_payment_request_hdr) (s_payment_response s_pay
 		if s_payment_request.Type == "telefonia" {
 			transferResponse, err := ws.DoPaymentTel1(s_login_credentials, s_payment_request.Rcpt, s_payment_request.Service)
 
-			if err != nil || transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Status != "0" || transferResponse.XMLProvider.XMLCheckPaymentRequisites.Status != "0" {
+			if err != nil {
 				s_payment_response.StatusCode = 500
 				s_payment_response.ErrorMessage = "Internal server error"
 				return s_payment_response, nil
 			}
-			if transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Status != "0" || transferResponse.XMLProvider.XMLCheckPaymentRequisites.Status != "0" {
+			if transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Result != "0" || transferResponse.XMLProvider.XMLCheckPaymentRequisites.Result != "0" {
 				s_payment_response.StatusCode = 400
 				s_payment_response.ErrorMessage = "Internal server error"
 				return s_payment_response, nil
@@ -191,7 +195,7 @@ func payment1(s_payment_request s_payment_request_hdr) (s_payment_response s_pay
 				s_payment_response.ErrorMessage = "Internal server error"
 				return s_payment_response, nil
 			}
-			if transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Status != "0" || transferResponse.XMLProvider.XMLCheckPaymentRequisites.Status != "0" {
+			if transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Result != "0" || transferResponse.XMLProvider.XMLCheckPaymentRequisites.Result != "0" {
 				s_payment_response.StatusCode = 400
 				s_payment_response.ErrorMessage = "Internal server error"
 				return s_payment_response, nil
@@ -225,7 +229,7 @@ func payment1(s_payment_request s_payment_request_hdr) (s_payment_response s_pay
 				s_payment_response.ErrorMessage = "Internal server error"
 				return s_payment_response, nil
 			}
-			if transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Status != "0" || transferResponse.XMLProvider.XMLCheckPaymentRequisites.Status != "0" {
+			if transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Result != "0" || transferResponse.XMLProvider.XMLCheckPaymentRequisites.Result != "0" {
 				s_payment_response.StatusCode = 400
 				s_payment_response.ErrorMessage = "Internal server error"
 				return s_payment_response, nil
@@ -257,7 +261,7 @@ func payment1(s_payment_request s_payment_request_hdr) (s_payment_response s_pay
 	return s_payment_response, nil
 }
 func payment2(s_payment_request s_payment_request_hdr) (s_payment_response s_status, err error) {
-	if s_payment_request.Type == "" {
+	if s_payment_request.Type == "" || s_payment_request.Amount == "" || s_payment_request.Service == "" {
 		s_payment_response.StatusCode = 500
 		s_payment_response.ErrorMessage = "Missing type."
 
@@ -267,6 +271,15 @@ func payment2(s_payment_request s_payment_request_hdr) (s_payment_response s_sta
 	s_payment_response = s_status{}
 
 	dbConn := db.Connect()
+
+	serviceId, _ := strconv.ParseInt(s_payment_request.Service, 10, 0)
+	serviceInfo, err := db.GetServiceByPrid(dbConn, int(serviceId))
+	if err != nil {
+		s_payment_response.StatusCode = 500
+		s_payment_response.ErrorMessage = "Invalid service"
+
+		return s_payment_response, nil
+	}
 
 	defer dbConn.Close()
 
@@ -281,28 +294,48 @@ func payment2(s_payment_request s_payment_request_hdr) (s_payment_response s_sta
 
 		session := ""
 
-		transferResponse1, err := ws.DoPaymentTel2(s_login_credentials, s_payment_request.Id, s_payment_request.Rcpt, s_payment_request.Service, s_payment_request.SelectedAmount)
-		if err != nil {
-			s_payment_response.StatusCode = 500
-			s_payment_response.ErrorMessage = "Internal server error"
-			return s_payment_response, nil
-		} else {
-			session = transferResponse1.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp1
-			//			pid = transferResponse1.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Id
+		switch serviceInfo.PaymentType {
+		case "Corban":
+			session = s_payment_request.Session
+			s_payment_request.Rcpt = s_login_credentials.Cel
+			s_payment_request.SelectedAmount = s_payment_request.Amount
+			break
+		case "Credisan":
+			session = s_payment_request.Session
+			s_payment_request.Rcpt = s_login_credentials.Cel
+			s_payment_request.SelectedAmount = s_payment_request.Amount
+			break
+		case "Software Express":
+		case "Pin Offline":
+		case "RV":
+		case "QIWI":
+
+		default:
+			transferResponse1, err := ws.DoPaymentTel2(s_login_credentials, s_payment_request.Id, s_payment_request.Rcpt, s_payment_request.Service, s_payment_request.SelectedAmount)
+			if err != nil {
+				s_payment_response.StatusCode = 500
+				s_payment_response.ErrorMessage = "Internal server error"
+
+				return s_payment_response, nil
+			} else {
+				session = transferResponse1.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp1
+			}
+
+			break
+
 		}
 
-		// fim verifica senha
 		transferResponse2, requestXML, responseXML, err := ws.DoPaymentTel3(s_login_credentials, s_payment_request.Id, session, s_payment_request.Rcpt, s_payment_request.Service, s_payment_request.SelectedAmount)
 		if err != nil {
 			s_payment_response.StatusCode = 500
 			s_payment_response.ErrorMessage = "Internal server error"
 			return s_payment_response, nil
 		} else {
-			//			if transferResponse2.XMLProvider.XMLPurchaseOnline.Result != "0" {
-			//				s_payment_response.StatusCode = 500
-			//				s_payment_response.ErrorMessage = "Erro código level 1: " + transferResponse2.XMLProvider.XMLPurchaseOnline.Result
-			//				return s_payment_response, nil
-			//			}
+			if transferResponse2.XMLProvider.XMLPurchaseOnline.Result != "0" {
+				s_payment_response.StatusCode = 500
+				s_payment_response.ErrorMessage = "Erro código level 1: " + transferResponse2.XMLProvider.XMLPurchaseOnline.Result
+				return s_payment_response, nil
+			}
 			if transferResponse2.XMLProvider.XMLPurchaseOnline.XMLPayment.Result != "0" {
 				s_payment_response.StatusCode = 500
 				s_payment_response.ErrorMessage = "Erro código level 2: " + transferResponse2.XMLProvider.XMLPurchaseOnline.XMLPayment.Result

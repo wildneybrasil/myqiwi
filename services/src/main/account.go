@@ -120,6 +120,7 @@ func getProvider(s_provider_request s_provider_request_hdr) (s_provider_response
 					if item.PrvId == s.RvId {
 						item.ServiceName = s.Name
 						item.Type = s.Type
+						item.LongName = s.LongName
 					}
 				}
 			}

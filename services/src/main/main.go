@@ -95,6 +95,29 @@ func main() {
 			w.Write(resultString)
 
 			break
+		case "/ws/profile":
+			s_cel_info := s_cel_info_hdr{}
+
+			err := parseContent(r.Body, &s_cel_info)
+			if err != nil {
+				fmt.Println(err.Error())
+				w.Write([]byte(err.Error()))
+			}
+
+			s_result, err := getMyInfo(s_cel_info)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			resultString, err := json.Marshal(s_result)
+
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			w.Write(resultString)
+
+			break
 		case "/ws/getHistory":
 			s_history_request := s_history_request_hdr{}
 

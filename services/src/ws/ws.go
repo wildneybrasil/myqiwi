@@ -58,7 +58,7 @@ type s_XMLGetBalance_hdr struct {
 	Overdraft   string `xml:"overdraft,omitempty"`
 }
 type s_XMLCheckPaymentRequisites struct {
-	Status     string       `xml:"statu,attr,omitempty"`
+	Result     string       `xml:"result,attr,omitempty"`
 	XMLPayment s_XMLPayment `xml:"payment,omitempty"`
 }
 type s_XMLPaymentFrom struct {
@@ -649,7 +649,7 @@ func GetLastID(s_credentials *db.Login_credentials_hdr) (*WSResponse_lastGetID_h
 
 	return &s_response_createBill, nil
 }
-func GetBoletoInfo(s_credentials *db.Login_credentials_hdr, boleto string, fromAccount string, scanned string) (*WSResponse_transferCredits_hdr, error) {
+func GetBoletoInfo(s_credentials *db.Login_credentials_hdr, boleto string, amount string, fromAccount string, scanned string, service string) (*WSResponse_transferCredits_hdr, error) {
 	fmt.Println("GET CREATE BILL")
 
 	s_response_createBill := WSResponse_transferCredits_hdr{}
@@ -669,7 +669,7 @@ func GetBoletoInfo(s_credentials *db.Login_credentials_hdr, boleto string, fromA
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentTo.Amount = "1"
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentTo.Currency = "986"
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentTo.Account = fromAccount
-	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentTo.Service = "151022"
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentTo.Service = service
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentReceipt.Date = currentDate
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentReceipt.Id = strconv.Itoa(int(currentId))
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_isWeb = "1"
@@ -677,6 +677,44 @@ func GetBoletoInfo(s_credentials *db.Login_credentials_hdr, boleto string, fromA
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_isnom = "1"
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_reqtype = "2"
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_scan = scanned
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_exact_amount = amount
+
+	result, _, err := send(s_credentials, &requestType)
+	if err != nil {
+		return nil, err
+	}
+
+	//	fmt.Println(result)
+
+	if err := xml.NewDecoder(strings.NewReader(*result)).Decode(&s_response_createBill); err != nil {
+		return nil, err
+	}
+
+	return &s_response_createBill, nil
+}
+func ChangeBoletoValue(s_credentials *db.Login_credentials_hdr, session string, id string, amount string, fromAccount string) (*WSResponse_transferCredits_hdr, error) {
+	fmt.Println("GET CREATE BILL")
+
+	s_response_createBill := WSResponse_transferCredits_hdr{}
+
+	currentDate := arrow.Now().CFormat("%Y-%m-%dT%H:%M:%S")
+
+	requestType := s_request_data{}
+	requestType.XMLProvider = &s_XMLProvider_hdr{}
+	requestType.XMLProvider.XMLCheckPaymentRequisites = &s_XMLCheckPaymentRequisites{}
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Id = id
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentFrom.Amount = amount
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentFrom.Currency = "986"
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentTo.Amount = "1"
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentTo.Currency = "986"
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentTo.Account = fromAccount
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentTo.Service = "151022"
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentReceipt.Date = currentDate
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentReceipt.Id = id
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_isWeb = "1"
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_exact_amount = amount
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_session_guid = session
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_reqtype = "2"
 
 	result, _, err := send(s_credentials, &requestType)
 	if err != nil {

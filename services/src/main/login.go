@@ -48,9 +48,10 @@ type s_activate_request_hdr struct {
 	ActivationCode string `json:"activationCode"`
 }
 type s_login_info_response_data_hdr struct {
-	Name  string `json:"name"`
-	Cel   string `json:"cel"`
-	Photo string `json:"photo"`
+	Name  string `json:"name",omitempty`
+	Cel   string `json:"cel",omitempty`
+	Photo string `json:"photo",omitempty`
+	Email string `json:"email",omitempty`
 }
 type s_login_info_response_hdr struct {
 	s_status
@@ -490,4 +491,37 @@ func getPublicLoginInfoByCel(s_cel_info s_cel_info_hdr) (s_balance_response s_ba
 		s_balance_response.ErrorMessage = "Login/Senha inválido"
 	}
 	return s_balance_response, nil
+}
+func getMyInfo(s_cel_info s_cel_info_hdr) (s_login_info s_login_info_response_hdr, err error) {
+	if s_cel_info.AuthToken == "" {
+		s_login_info.Status = "failed"
+		s_login_info.StatusCode = 403
+		s_login_info.ErrorMessage = "Faltando dados"
+
+		return s_login_info, nil
+	}
+
+	dbConn := db.Connect()
+	defer dbConn.Close()
+
+	s_login_credentials, err := db.GetAuthToken(dbConn, s_cel_info.AuthToken)
+	if err == nil && s_login_credentials.Id > 0 {
+		userInfo, err := db.GetLoginInfoById(dbConn, s_login_credentials.Id)
+		if err != nil {
+			s_login_info.StatusCode = 500
+			s_login_info.ErrorMessage = "Internal server error"
+		} else {
+			s_login_info.Status = "success"
+			s_login_info.StatusCode = 0
+			s_login_info.Data.Cel = userInfo.Cel
+			s_login_info.Data.Photo = userInfo.Photo
+			s_login_info.Data.Name = userInfo.Name
+			s_login_info.Data.Email = userInfo.Email
+
+		}
+	} else {
+		s_login_info.StatusCode = 403
+		s_login_info.ErrorMessage = "Login/Senha inválido"
+	}
+	return s_login_info, nil
 }
