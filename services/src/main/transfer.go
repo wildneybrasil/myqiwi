@@ -5,6 +5,7 @@ import (
 	"db"
 	b64 "encoding/base64"
 	"fmt"
+	"strconv"
 	"strings"
 	"ws"
 
@@ -94,7 +95,11 @@ func transferCredits1(s_transferCredits_request s_transferCredits_request_hdr) (
 			for k, _ := range V1 {
 
 				item := s_values_item_hdr{}
-				item.Amount = V1[k]
+				amount := strings.Replace(V1[k], "|", "", -1)
+				amountFloat, _ := strconv.ParseFloat(amount, 64)
+				amountString := strconv.FormatFloat(amountFloat, 'E', -1, 64)
+
+				item.Amount = amountString
 				item.Id = V3[k]
 
 				s_transferCredits_response.Data.Nominals.Items = append(s_transferCredits_response.Data.Nominals.Items, item)

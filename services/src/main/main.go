@@ -539,6 +539,29 @@ func main() {
 			w.Write(resultString)
 
 			break
+		case "/ws/updateAccount":
+			s_login_update_request := s_login_update_request_hdr{}
+
+			err := parseContent(r.Body, &s_login_update_request)
+			if err != nil {
+				fmt.Println(err.Error())
+				w.Write([]byte(err.Error()))
+			}
+
+			s_result, err := updateUser(s_login_update_request)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			resultString, err := json.Marshal(s_result)
+
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			w.Write(resultString)
+
+			break
 		case "/ws/getBoletoImage":
 			s_getBill_request := s_getBill_request_hdr{}
 

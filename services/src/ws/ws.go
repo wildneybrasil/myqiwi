@@ -66,11 +66,17 @@ type s_XMLPaymentFrom struct {
 	Currency string `xml:"currency,attr,omitempty"`
 	Type     string `xml:"type,attr,omitempty"`
 }
+type s_XMLPaymentToGoods struct {
+	Amount string `xml:"amount,attr,omitempty"`
+	Count  string `xml:"count,attr,omitempty"`
+	Id     string `xml:"id,attr,omitempty"`
+}
 type s_XMLPaymentTo struct {
-	Account  string `xml:"account,attr,omitempty"`
-	Amount   string `xml:"amount,attr,omitempty"`
-	Currency string `xml:"currency,attr,omitempty"`
-	Service  string `xml:"service,attr,omitempty"`
+	Account  string               `xml:"account,attr,omitempty"`
+	Amount   string               `xml:"amount,attr,omitempty"`
+	Currency string               `xml:"currency,attr,omitempty"`
+	Service  string               `xml:"service,attr,omitempty"`
+	Goods    *s_XMLPaymentToGoods `xml:"goods,omitempty"`
 }
 type s_XMLPaymentReceipt struct {
 	Date string `xml:"date,attr,omitempty"`
@@ -99,6 +105,32 @@ type s_XMLPaymentExtras struct {
 	Ev_session_guid      string `xml:"ev_session_guid,attr,omitempty"`
 	Ev_useExistsVouchers string `xml:"ev_useExistsVouchers,attr,omitempty"`
 }
+type s_XMLGoodsItemParam struct {
+	Name  string `xml:"name,attr,omitempty"`
+	Value string `xml:",chardata"`
+}
+type s_XMLGoodsItem struct {
+	Param []s_XMLGoodsItemParam `xml:"param,omitempty"`
+}
+type s_XMLGoods struct {
+	Item     s_XMLGoodsItem `xml:"item,attr,omitempty"`
+	Amount   string         `xml:"amount,attr,omitempty"`
+	Id       string         `xml:"id,attr,omitempty"`
+	Name     string         `xml:"name,attr,omitempty"`
+	Currency string         `xml:"currency,attr,omitempty"`
+}
+type s_XMLGoodsNomenclature struct {
+	Amount   string `xml:"amount,attr,omitempty"`
+	Id       string `xml:"id,attr,omitempty"`
+	Name     string `xml:"name,attr,omitempty"`
+	Currency string `xml:"currency,attr,omitempty"`
+}
+type s_XMLGoodsPayment struct {
+	Amount string          `xml:"amount,attr,omitempty"`
+	Id     string          `xml:"id,attr,omitempty"`
+	Count  string          `xml:"count,attr,omitempty"`
+	Item   *s_XMLGoodsItem `xml:"item,omitempty"`
+}
 type s_XMLVoucher struct {
 	Amount      string            `xml:"amount,attr,omitempty"`
 	Code        string            `xml:"code,attr,omitempty"`
@@ -107,7 +139,7 @@ type s_XMLVoucher struct {
 type s_XMLPrintHeader struct {
 	Amount  string         `xml:"amount,attr,omitempty"`
 	Code    string         `xml:"code,attr,omitempty"`
-	PrvData []s_XMLPrvData `xml:"code,attr,omitempty"`
+	PrvData []s_XMLPrvData `xml:"prvDate,attr,omitempty"`
 }
 type s_XMLPrvData struct {
 	Value   string `xml:"value,attr,omitempty"`
@@ -123,6 +155,7 @@ type s_XMLPayment struct {
 	XMLPaymentReceipt s_XMLPaymentReceipt `xml:"receipt,omitempty"`
 	XMLPaymentExtras  s_XMLPaymentExtras  `xml:"extras,omitempty"`
 	XMLVoucher        *s_XMLVoucher       `xml:"voucher,omitempty"`
+	XMLGoods          *s_XMLGoodsPayment  `xml:"goods,omitempty"`
 }
 type s_XMLLastPayment_hdr struct {
 	Id            string `xml:"id,attr,omitempty"`
@@ -192,12 +225,6 @@ type s_XMLProvider_hdr struct {
 type s_XMLGetNomenclature struct {
 	Service string        `xml:"service"`
 	Goods   *[]s_XMLGoods `xml:"goods"`
-}
-type s_XMLGoods struct {
-	Amount   string `xml:"amount,attr"`
-	Id       string `xml:"id,attr"`
-	Name     string `xml:"name,attr"`
-	Currency string `xml:"currency,attr"`
 }
 type WSResponse_getProvider_hdr struct {
 	Result            string            `xml:"result,attr"`
@@ -404,7 +431,7 @@ func splitCelDDD(phone string) string {
 
 	return "(" + ddd + ")" + cel
 }
-func DoPaymentTel1(s_credentials *db.Login_credentials_hdr, toAccount string, serviceId string) (*WSResponse_transferCredits_hdr, error) {
+func DoPaymentTel1(s_credentials *db.Login_credentials_hdr, toAccount string, serviceId string, Ev_force string, Ev_step string, Ev_isnom string, Ev_reqtype string) (*WSResponse_transferCredits_hdr, error) {
 	fmt.Println("GET CREATE BILL")
 
 	s_response_createBill := WSResponse_transferCredits_hdr{}
@@ -427,9 +454,9 @@ func DoPaymentTel1(s_credentials *db.Login_credentials_hdr, toAccount string, se
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentTo.Service = serviceId
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentReceipt.Date = currentDate
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentReceipt.Id = strconv.Itoa(int(currentId))
-	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_force_amount = "true"
-	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_isnom = "1"
-	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_reqtype = "2"
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_force_amount = Ev_force
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_isnom = Ev_isnom
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_reqtype = Ev_reqtype
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_isWeb = "1"
 
 	result, _, err := send(s_credentials, &requestType)
@@ -483,6 +510,56 @@ func DoPaymentTel2(s_credentials *db.Login_credentials_hdr, currentId string, to
 
 	return &s_response_createBill, nil
 }
+func DoPaymentGames2(s_credentials *db.Login_credentials_hdr, toAccount string, serviceId string, selectedAmount string, goodsId string) (*WSResponse_transferCredits_hdr, *string, *string, error) {
+	fmt.Println("GET CREATE BILL")
+
+	lastId, _ := GetLastID(s_credentials)
+	currentId, _ := strconv.ParseInt(lastId.XMLTerminals.XMLGetLastIds.XMLLastPayment.Id, 10, 0)
+	currentId = currentId + 1
+
+	s_response_createBill := WSResponse_transferCredits_hdr{}
+
+	currentDate := arrow.Now().CFormat("%Y-%m-%dT%H:%M:%S")
+
+	requestType := s_request_data{}
+	requestType.XMLProvider = &s_XMLProvider_hdr{}
+	requestType.XMLProvider.XMLPurchaseOnline = &s_XMLPurchaseOnline{}
+	requestType.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLGoods = &s_XMLGoodsPayment{}
+	requestType.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLPaymentTo.Goods = &s_XMLPaymentToGoods{}
+
+	requestType.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLPaymentFrom.Amount = selectedAmount
+	requestType.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLPaymentFrom.Currency = "986"
+	requestType.XMLProvider.XMLPurchaseOnline.XMLPayment.Comment = "Comment"
+
+	requestType.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLPaymentTo.Amount = selectedAmount
+	requestType.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLPaymentTo.Currency = "986"
+	requestType.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLPaymentTo.Account = toAccount
+	requestType.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLPaymentTo.Service = serviceId
+	requestType.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLPaymentReceipt.Date = currentDate
+	requestType.XMLProvider.XMLPurchaseOnline.XMLPayment.Id = strconv.Itoa(int(currentId))
+	requestType.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLPaymentExtras.Ev_isWeb = "1"
+	requestType.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLPaymentExtras.Ev_useExistsVouchers = "true"
+	requestType.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLPaymentTo.Goods.Amount = selectedAmount
+	requestType.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLPaymentTo.Goods.Count = "1"
+	requestType.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLPaymentTo.Goods.Id = goodsId
+	result, requestString, err := send(s_credentials, &requestType)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	//	fmt.Println(result)
+
+	s_response_createBill.XMLProvider.XMLPurchaseOnline = &s_XMLPurchaseOnline{}
+	s_response_createBill.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLVoucher = &s_XMLVoucher{}
+	s_response_createBill.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLGoods = &s_XMLGoodsPayment{}
+	s_response_createBill.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLGoods.Item = &s_XMLGoodsItem{}
+
+	if err := xml.NewDecoder(strings.NewReader(*result)).Decode(&s_response_createBill); err != nil {
+		return nil, nil, nil, err
+	}
+
+	return &s_response_createBill, requestString, result, nil
+}
 func DoPaymentTel3(s_credentials *db.Login_credentials_hdr, currentId string, session string, toAccount string, serviceId string, selectedAmount string) (*WSResponse_transferCredits_hdr, *string, *string, error) {
 	fmt.Println("GET CREATE BILL")
 
@@ -526,7 +603,7 @@ func DoPaymentTel3(s_credentials *db.Login_credentials_hdr, currentId string, se
 
 	return &s_response_createBill, requestString, result, nil
 }
-func DoPaymentTrans1(s_credentials *db.Login_credentials_hdr, cardNumber string, serviceId string) (*WSResponse_transferCredits_hdr, error) {
+func DoPaymentTrans1(s_credentials *db.Login_credentials_hdr, cardNumber string, serviceId string, Ev_force string, Ev_step string, Ev_isnom string, Ev_reqtype string) (*WSResponse_transferCredits_hdr, error) {
 	fmt.Println("GET CREATE BILL")
 
 	s_response_createBill := WSResponse_transferCredits_hdr{}
@@ -549,8 +626,10 @@ func DoPaymentTrans1(s_credentials *db.Login_credentials_hdr, cardNumber string,
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentTo.Service = serviceId
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentReceipt.Date = currentDate
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentReceipt.Id = strconv.Itoa(int(currentId))
-	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_step = "1"
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_step = Ev_step
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_isWeb = "1"
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_reqtype = Ev_reqtype
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_isnom = Ev_isnom
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_card_number = cardNumber
 
 	result, _, err := send(s_credentials, &requestType)
@@ -566,7 +645,7 @@ func DoPaymentTrans1(s_credentials *db.Login_credentials_hdr, cardNumber string,
 
 	return &s_response_createBill, nil
 }
-func DoPaymentGames1(s_credentials *db.Login_credentials_hdr, cardNumber string, serviceId string) (*WSResponse_transferCredits_hdr, error) {
+func DoPaymentGames1(s_credentials *db.Login_credentials_hdr, serviceId string) (*WSResponse_transferCredits_hdr, error) {
 	fmt.Println("GET CREATE BILL")
 
 	s_response_createBill := WSResponse_transferCredits_hdr{}

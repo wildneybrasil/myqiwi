@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strconv"
 
 	_ "github.com/lib/pq"
 )
@@ -214,6 +215,39 @@ func ChangePassword(db *sql.DB, email string, password string, salt string) erro
 	return nil
 
 }
+
+func UpdateUser(db *sql.DB, id int, name string, photo string, email string, password string, salt string) error {
+	if password != "" {
+		fmt.Println("UPDATE WITH PASSWORD: " + strconv.Itoa(id))
+		stmt, err := db.Prepare(`update user_credentials set name = $1, email=$2, password=$3, password_salt=$4, photo=$5 where email=$6`)
+		defer stmt.Close()
+		if err != nil {
+			fmt.Println(err.Error())
+			return err
+		}
+		_, err = stmt.Exec(name, email, password, salt, photo, id)
+		if err != nil {
+			fmt.Println(err.Error())
+			return err
+		}
+	} else {
+		fmt.Println("UPDATE SIMPLE: " + strconv.Itoa(id))
+		stmt, err := db.Prepare(`update user_credentials set name = $1, email=$2,  photo=$3 where id=$4`)
+		defer stmt.Close()
+		if err != nil {
+			fmt.Println(err.Error())
+			return err
+		}
+		_, err = stmt.Exec(name, email, photo, id)
+		if err != nil {
+			fmt.Println(err.Error())
+			return err
+		}
+
+	}
+	return nil
+
+}
 func IncreaseFailedLoginOfEmail(db *sql.DB, email string) error {
 	stmt, err := db.Prepare(`update user_credentials set login_failed_count = login_failed_count + 1 where email=$1`)
 	defer stmt.Close()
@@ -290,7 +324,10 @@ func GetPublicLoginInfoByCel(db *sql.DB, cel string) (*Login_credentials_hdr, er
 
 	s_login_credentials := Login_credentials_hdr{}
 
-	err = stmt.QueryRow(cel).Scan(&s_login_credentials.Id, &s_login_credentials.Cel, &s_login_credentials.Name, &s_login_credentials.Photo)
+	var photo []byte
+
+	s_login_credentials.Photo = string(photo)
+	err = stmt.QueryRow(cel).Scan(&s_login_credentials.Id, &s_login_credentials.Cel, &s_login_credentials.Name, &photo)
 
 	if err != nil {
 		fmt.Println(err.Error())
@@ -425,7 +462,7 @@ func GetServiceByPrid(db *sql.DB, prvId int) (*Services_hdr, error) {
 func ListHistory(db *sql.DB, userId int) (*[]History_hdr, error) {
 	result := make([]History_hdr, 0)
 
-	stmt, err := db.Prepare("select i.longname, s.name, extract(epoch from h.tv at time zone 'utc')::integer as tv,h.id, h.payment_type, h.service_id, h.json_request->'rcpt',h.json_request->'amount'  from payment_history h, servicos_items i, servicos s where i.rv_id=h.service_id and i.servico_id=s.id and h.user_credential_id=$1")
+	stmt, err := db.Prepare("select i.longname, s.name, extract(epoch from h.tv at time zone 'utc')::integer as tv,h.id, h.payment_type, h.service_id, h.json_request->>'rcpt',h.json_request->>'amount'  from payment_history h, servicos_items i, servicos s where i.rv_id=h.service_id and i.servico_id=s.id and h.user_credential_id=$1")
 	if err != nil {
 		log.Fatal(err)
 	}

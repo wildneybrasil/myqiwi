@@ -57,6 +57,14 @@ type s_login_info_response_hdr struct {
 	s_status
 	Data s_login_info_response_data_hdr `json:"data,omitempty"`
 }
+type s_login_update_request_hdr struct {
+	AuthToken string `json:"authToken"`
+	Email     string `json:"email"`
+	Password  string `json:"password"`
+	Name      string `json:"name"`
+	Cel       string `json:"cel"`
+	Photo     string `json:"photo"`
+}
 type s_login_create_request_hdr struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
@@ -134,6 +142,42 @@ func createLogin(s_login_create_request s_login_create_request_hdr) (s_login_cre
 
 	s_login_create_response.Data = &s_login_response_data_hdr{}
 	s_login_create_response.Data.AuthToken = authToken
+
+	return s_login_create_response, nil
+}
+
+func updateUser(s_login_update_request s_login_update_request_hdr) (s_login_create_response s_login_create_response_hdr, err error) {
+	salt := random.RandomString(32)
+
+	s_login_create_response = s_login_create_response_hdr{}
+
+	dbConn := db.Connect()
+	defer dbConn.Close()
+
+	s_login_credentials, err := db.GetAuthToken(dbConn, s_login_update_request.AuthToken)
+	if err != nil || s_login_credentials.Id == 0 {
+		s_login_create_response.Status = "failed"
+		s_login_create_response.StatusCode = 403
+		s_login_create_response.ErrorMessage = "Invalid Token"
+
+		return s_login_create_response, nil
+	}
+	dkb64Encoded := ""
+	if s_login_update_request.Password != "" {
+		dk, err := scrypt.Key([]byte(s_login_update_request.Password), []byte(salt), 16384, 8, 1, 32)
+		if err != nil {
+			s_login_create_response.Status = "failed"
+			s_login_create_response.StatusCode = 500
+			s_login_create_response.ErrorMessage = "Internal server error"
+
+			return s_login_create_response, nil
+		}
+		dkb64Encoded = b64.StdEncoding.EncodeToString([]byte(dk))
+	}
+
+	fmt.Println(dkb64Encoded)
+
+	db.UpdateUser(dbConn, s_login_credentials.Id, s_login_update_request.Name, s_login_update_request.Photo, s_login_update_request.Email, dkb64Encoded, salt)
 
 	return s_login_create_response, nil
 }
@@ -459,16 +503,14 @@ func verifyLPToken(s_lost_password s_lost_password_hdr) (result s_status) {
 //	}
 //	return s_balance_response, nil
 //}
-func getPublicLoginInfoByCel(s_cel_info s_cel_info_hdr) (s_balance_response s_balance_response_hdr, err error) {
+func getPublicLoginInfoByCel(s_cel_info s_cel_info_hdr) (s_login_info s_login_info_response_hdr, err error) {
 	if s_cel_info.AuthToken == "" || s_cel_info.Cel == "" {
-		s_balance_response.Status = "failed"
-		s_balance_response.StatusCode = 403
-		s_balance_response.ErrorMessage = "Faltando dados"
+		s_login_info.Status = "failed"
+		s_login_info.StatusCode = 403
+		s_login_info.ErrorMessage = "Faltando dados"
 
-		return s_balance_response, nil
+		return s_login_info, nil
 	}
-	s_login_info := s_login_info_response_hdr{}
-
 	dbConn := db.Connect()
 	defer dbConn.Close()
 
@@ -476,21 +518,23 @@ func getPublicLoginInfoByCel(s_cel_info s_cel_info_hdr) (s_balance_response s_ba
 	if err == nil && s_login_credentials.Id > 0 {
 		dbResult, err := db.GetPublicLoginInfoByCel(dbConn, s_cel_info.Cel)
 		if err != nil {
-			s_balance_response.StatusCode = 500
-			s_balance_response.ErrorMessage = "Internal server error"
+			s_login_info.Status = "failed"
+			s_login_info.StatusCode = 500
+			s_login_info.ErrorMessage = "Internal server error"
 		} else {
-			s_balance_response.Status = "success"
-			s_balance_response.StatusCode = 0
+			s_login_info.Status = "success"
+			s_login_info.StatusCode = 0
 			s_login_info.Data.Cel = s_cel_info.Cel
 			s_login_info.Data.Photo = dbResult.Photo
 			s_login_info.Data.Name = dbResult.Name
 
 		}
 	} else {
-		s_balance_response.StatusCode = 403
-		s_balance_response.ErrorMessage = "Login/Senha inválido"
+		s_login_info.Status = "failed"
+		s_login_info.StatusCode = 403
+		s_login_info.ErrorMessage = "Login/Senha inválido"
 	}
-	return s_balance_response, nil
+	return s_login_info, nil
 }
 func getMyInfo(s_cel_info s_cel_info_hdr) (s_login_info s_login_info_response_hdr, err error) {
 	if s_cel_info.AuthToken == "" {
