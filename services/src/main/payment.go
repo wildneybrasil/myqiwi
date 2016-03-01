@@ -217,7 +217,7 @@ func payment1(s_payment_request s_payment_request_hdr) (s_payment_response s_pay
 
 				amount := strings.Replace(V1[k], "|", "", -1)
 				amountFloat, _ := strconv.ParseFloat(amount, 64)
-				amountString := strconv.FormatFloat(amountFloat, 'E', -1, 64)
+				amountString := fmt.Sprintf("%.02f", amountFloat/100)
 
 				item.Amount = amountString
 				item.Id = strings.Replace(V3[k], "|", "", -1)
@@ -263,9 +263,21 @@ func payment1(s_payment_request s_payment_request_hdr) (s_payment_response s_pay
 				s_payment_response.ErrorMessage = "Internal server error"
 				return s_payment_response, nil
 			}
+			if transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp2 != "" {
+				s_payment_response.StatusCode = 400
+				s_payment_response.ErrorMessage = transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp2
+				return s_payment_response, nil
+			}
 
 			s_payment_response.Data = &s_payment_response_data_hdr{}
 			s_payment_response.Data.Nominals = &s_values_response_hdr{}
+			// fake nominal
+			item := s_values_item_hdr{}
+			item.Amount = "20"
+			item.Id = "1"
+
+			s_payment_response.Data.Nominals.Items = []s_values_item_hdr{item}
+
 			s_payment_response.Data.Session = transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp1
 			s_payment_response.Data.Id = transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Id
 		}
@@ -327,6 +339,7 @@ func payment2(s_payment_request s_payment_request_hdr) (s_payment_response s_pay
 		}
 
 		session := ""
+		fmt.Printf("PAYMENT TYPE [%s]\n", serviceInfo.PaymentType)
 
 		switch serviceInfo.PaymentType {
 		case "Corban":
@@ -339,12 +352,13 @@ func payment2(s_payment_request s_payment_request_hdr) (s_payment_response s_pay
 			break
 		case "Transporte":
 			break
-		case "Software Express":
-		case "Pin Offline":
-		case "RV":
-		case "QIWI":
+		// case "Software Express":
+		// case "Pin Offline":
+		// case "RV":
+		// case "QIWI":
 
 		default:
+			fmt.Println("TEL 2")
 			transferResponse1, err := ws.DoPaymentTel2(s_login_credentials, s_payment_request.Id, s_payment_request.Rcpt, s_payment_request.Service, s_payment_request.Amount)
 			if err != nil {
 				s_payment_response.StatusCode = 500
@@ -365,16 +379,17 @@ func payment2(s_payment_request s_payment_request_hdr) (s_payment_response s_pay
 			transferResponse2, requestXML, responseXML, err = ws.DoPaymentGames2(s_login_credentials, s_payment_request.Rcpt, s_payment_request.Service, s_payment_request.Amount, s_payment_request.SelectedAmount)
 			break
 		case "Transporte":
+			fmt.Println("TRANSRPOTE 2")
 			s_payment_request.Rcpt = "99999999999"
 			transferResponse2, requestXML, responseXML, err = ws.DoPaymentTel3(s_login_credentials, s_payment_request.Id, session, s_payment_request.Rcpt, s_payment_request.Service, s_payment_request.Amount)
 			break
-		case "Corban":
-		case "Credisan":
-		case "Software Express":
-		case "RV":
-		case "QIWI":
+		// case "Corban":
+		// case "Credisan":
+		// case "Software Express":
+		// case "RV":
+		// case "QIWI":
 		default:
-			fmt.Println("LOG")
+			fmt.Println("TEL 3")
 			transferResponse2, requestXML, responseXML, err = ws.DoPaymentTel3(s_login_credentials, s_payment_request.Id, session, s_payment_request.Rcpt, s_payment_request.Service, s_payment_request.Amount)
 
 			break

@@ -282,7 +282,7 @@ func GetLoginInfoByEmail(db *sql.DB, email string) (*Login_credentials_hdr, erro
 	return &s_login_credentials, nil
 }
 func GetLoginInfoById(db *sql.DB, id int) (*Login_credentials_hdr, error) {
-	stmt, err := db.Prepare("select  id, password, password_salt, terminal_login, terminal_id , terminal_serial, terminal_password, login_failed_count, status, cel, email,name  from user_credentials where id=$1")
+	stmt, err := db.Prepare("select  id, password, password_salt, terminal_login, terminal_id , terminal_serial, terminal_password, login_failed_count, status, cel, email,name,photo  from user_credentials where id=$1")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -290,8 +290,12 @@ func GetLoginInfoById(db *sql.DB, id int) (*Login_credentials_hdr, error) {
 
 	s_login_credentials := Login_credentials_hdr{}
 
-	err = stmt.QueryRow(id).Scan(&s_login_credentials.Id, &s_login_credentials.Password, &s_login_credentials.PasswordSalt, &s_login_credentials.TerminalLogin, &s_login_credentials.TerminalId, &s_login_credentials.TerminalSerial, &s_login_credentials.TerminalPassword, &s_login_credentials.FailedLoginCount, &s_login_credentials.Status, &s_login_credentials.Cel, &s_login_credentials.Email, &s_login_credentials.Name)
+	var photo []byte
+	err = stmt.QueryRow(id).Scan(&s_login_credentials.Id, &s_login_credentials.Password, &s_login_credentials.PasswordSalt, &s_login_credentials.TerminalLogin, &s_login_credentials.TerminalId, &s_login_credentials.TerminalSerial, &s_login_credentials.TerminalPassword, &s_login_credentials.FailedLoginCount, &s_login_credentials.Status, &s_login_credentials.Cel, &s_login_credentials.Email, &s_login_credentials.Name, &photo)
 
+	if len(photo) > 0 {
+		s_login_credentials.Photo = string(photo)
+	}
 	if err != nil {
 		fmt.Println(err.Error())
 		return nil, err
