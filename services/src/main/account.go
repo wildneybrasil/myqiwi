@@ -44,7 +44,7 @@ type s_history_data_item_hdr struct {
 }
 
 type s_history_response_data_hdr struct {
-	Item []s_history_data_item_hdr `json:"item"`
+	Item []s_history_data_item_hdr `json:"item,omitempty"`
 }
 type s_history_response_hdr struct {
 	s_status

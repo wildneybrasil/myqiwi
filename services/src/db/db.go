@@ -128,8 +128,8 @@ func InsertPaymentHistoryJSON(db *sql.DB, id int, jsonRequest string, jsonRepons
 	return nil
 }
 
-func CreateAccount(db *sql.DB, email string, cel string, password string, salt string, name string, photo string) (int, error) {
-	stmt, err := db.Prepare(`insert into user_credentials (  email, cel, password, password_salt, name,status,photo ) values ( $1,$2, $3,$4,$5,1,$6 )  RETURNING id`)
+func CreateAccount(db *sql.DB, email string, cel string, password string, salt string, name string, photo string, terminal_login string, terminal_password string, terminal_id string) (int, error) {
+	stmt, err := db.Prepare(`insert into user_credentials (  email, cel, password, password_salt, name,status,photo, terminal_login, terminal_password, terminal_id ) values ( $1,$2, $3,$4,$5,1,$6, $7,$8, $9 )  RETURNING id`)
 	defer stmt.Close()
 
 	if err != nil {
@@ -137,7 +137,7 @@ func CreateAccount(db *sql.DB, email string, cel string, password string, salt s
 		return 0, err
 	}
 	id := 0
-	err = stmt.QueryRow(email, cel, password, salt, name, photo).Scan(&id)
+	err = stmt.QueryRow(email, cel, password, salt, name, photo, terminal_login, terminal_password, terminal_id).Scan(&id)
 	if err != nil {
 		fmt.Println(err.Error())
 		return 0, err
@@ -216,29 +216,29 @@ func ChangePassword(db *sql.DB, email string, password string, salt string) erro
 
 }
 
-func UpdateUser(db *sql.DB, id int, name string, photo string, email string, password string, salt string) error {
+func UpdateUser(db *sql.DB, id int, photo string, password string) error {
 	if password != "" {
 		fmt.Println("UPDATE WITH PASSWORD: " + strconv.Itoa(id))
-		stmt, err := db.Prepare(`update user_credentials set name = $1, email=$2, password=$3, password_salt=$4, photo=$5 where email=$6`)
+		stmt, err := db.Prepare(`update user_credentials set password=$1,  photo=$2, terminal_password=$3 where email=$4`)
 		defer stmt.Close()
 		if err != nil {
 			fmt.Println(err.Error())
 			return err
 		}
-		_, err = stmt.Exec(name, email, password, salt, photo, id)
+		_, err = stmt.Exec(password, photo, password, id)
 		if err != nil {
 			fmt.Println(err.Error())
 			return err
 		}
 	} else {
 		fmt.Println("UPDATE SIMPLE: " + strconv.Itoa(id))
-		stmt, err := db.Prepare(`update user_credentials set name = $1, email=$2,  photo=$3 where id=$4`)
+		stmt, err := db.Prepare(`update user_credentials set photo=$1 where id=$2`)
 		defer stmt.Close()
 		if err != nil {
 			fmt.Println(err.Error())
 			return err
 		}
-		_, err = stmt.Exec(name, email, photo, id)
+		_, err = stmt.Exec(photo, id)
 		if err != nil {
 			fmt.Println(err.Error())
 			return err

@@ -258,9 +258,13 @@ func payment1(s_payment_request s_payment_request_hdr) (s_payment_response s_pay
 				s_payment_response.ErrorMessage = "Internal server error"
 				return s_payment_response, nil
 			}
-			if transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Result != "0" || transferResponse.XMLProvider.XMLCheckPaymentRequisites.Result != "0" {
-				s_payment_response.StatusCode = 400
-				s_payment_response.ErrorMessage = "Internal server error"
+			if transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Result != "0" {
+				s_payment_response.ErrorMessage, s_payment_response.StatusCode = ws.GetErrorMessage(transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Result)
+				return s_payment_response, nil
+
+			}
+			if transferResponse.XMLProvider.XMLCheckPaymentRequisites.Result != "0" {
+				s_payment_response.ErrorMessage, s_payment_response.StatusCode = ws.GetErrorMessage(transferResponse.XMLProvider.XMLCheckPaymentRequisites.Result)
 				return s_payment_response, nil
 			}
 			if transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp2 != "" {
@@ -380,7 +384,7 @@ func payment2(s_payment_request s_payment_request_hdr) (s_payment_response s_pay
 			break
 		case "Transporte":
 			fmt.Println("TRANSRPOTE 2")
-			s_payment_request.Rcpt = "99999999999"
+			s_payment_request.Rcpt = "(99)99999-9999"
 			transferResponse2, requestXML, responseXML, err = ws.DoPaymentTel3(s_login_credentials, s_payment_request.Id, session, s_payment_request.Rcpt, s_payment_request.Service, s_payment_request.Amount)
 			break
 		// case "Corban":
@@ -401,13 +405,11 @@ func payment2(s_payment_request s_payment_request_hdr) (s_payment_response s_pay
 			return s_payment_response, nil
 		} else {
 			if transferResponse2.XMLProvider.XMLPurchaseOnline.Result != "0" {
-				s_payment_response.StatusCode = 500
-				s_payment_response.ErrorMessage = "Erro código level 1: " + transferResponse2.XMLProvider.XMLPurchaseOnline.Result
+				s_payment_response.ErrorMessage, s_payment_response.StatusCode = ws.GetErrorMessage(transferResponse2.XMLProvider.XMLPurchaseOnline.Result)
 				return s_payment_response, nil
 			}
 			if transferResponse2.XMLProvider.XMLPurchaseOnline.XMLPayment.Result != "0" {
-				s_payment_response.StatusCode = 500
-				s_payment_response.ErrorMessage = "Erro código level 2: "
+				s_payment_response.ErrorMessage, s_payment_response.StatusCode = ws.GetErrorMessage(transferResponse2.XMLProvider.XMLPurchaseOnline.XMLPayment.Result)
 				return s_payment_response, nil
 			}
 			switch serviceInfo.PaymentType {

@@ -3,13 +3,10 @@ package main
 
 import (
 	"db"
-	b64 "encoding/base64"
 	"fmt"
 	"strconv"
 	"strings"
 	"ws"
-
-	"golang.org/x/crypto/scrypt"
 )
 
 type s_values_item_hdr struct {
@@ -60,28 +57,14 @@ func transferCredits1(s_transferCredits_request s_transferCredits_request_hdr) (
 	defer dbConn.Close()
 
 	s_rcpt_info, err := db.GetLoginInfoByCel(dbConn, s_transferCredits_request.Rcpt)
-
+	if err != nil || s_rcpt_info == nil {
+		s_transferCredits_response.Status = "failed"
+		s_transferCredits_response.StatusCode = 404
+		s_transferCredits_response.ErrorMessage = "Telefone não cadastrado no QIWI"
+		return s_transferCredits_response, nil
+	}
 	s_login_credentials, err := db.GetAuthToken(dbConn, s_transferCredits_request.AuthToken)
 	if err == nil && s_login_credentials.Id > 0 {
-		//verifica senha
-		dk, err := scrypt.Key([]byte(s_transferCredits_request.Password), []byte(s_login_credentials.PasswordSalt), 16384, 8, 1, 32)
-		if err != nil {
-			s_transferCredits_response.StatusCode = 403
-			s_transferCredits_response.ErrorMessage = "Login/Senha inválido."
-
-			return s_transferCredits_response, nil
-		}
-		dkb64Encoded := b64.StdEncoding.EncodeToString([]byte(dk))
-
-		fmt.Println(dkb64Encoded)
-
-		if dkb64Encoded != s_login_credentials.Password {
-			s_transferCredits_response.StatusCode = 403
-			s_transferCredits_response.ErrorMessage = "Login/Senha inválido."
-
-			return s_transferCredits_response, nil
-		}
-		// fim verifica senha
 		transferResponse, err := ws.TransferCredits1(s_login_credentials, s_rcpt_info.Cel, s_rcpt_info.TerminalId, "15695", "1")
 		if err != nil {
 			s_transferCredits_response.StatusCode = 500
@@ -95,9 +78,10 @@ func transferCredits1(s_transferCredits_request s_transferCredits_request_hdr) (
 			for k, _ := range V1 {
 
 				item := s_values_item_hdr{}
+
 				amount := strings.Replace(V1[k], "|", "", -1)
 				amountFloat, _ := strconv.ParseFloat(amount, 64)
-				amountString := strconv.FormatFloat(amountFloat, 'E', -1, 64)
+				amountString := fmt.Sprintf("%.02f", amountFloat/100)
 
 				item.Amount = amountString
 				item.Id = V3[k]
@@ -130,19 +114,7 @@ func transferCredits2(s_transferCredits_request s_transferCredits_request_hdr) (
 
 	s_login_credentials, err := db.GetAuthToken(dbConn, s_transferCredits_request.AuthToken)
 	if err == nil && s_login_credentials.Id > 0 {
-		// verifica senha
-		dk, err := scrypt.Key([]byte(s_transferCredits_request.Password), []byte(s_login_credentials.PasswordSalt), 16384, 8, 1, 32)
-		if err != nil {
-			s_transferCredits_response.StatusCode = 403
-			s_transferCredits_response.ErrorMessage = "Login/Senha inválido."
-
-			return s_transferCredits_response, nil
-		}
-		dkb64Encoded := b64.StdEncoding.EncodeToString([]byte(dk))
-
-		fmt.Println(dkb64Encoded)
-
-		if dkb64Encoded != s_login_credentials.Password {
+		if !CheckPassword(s_transferCredits_request.Password, s_login_credentials.Password, s_login_credentials.PasswordSalt) {
 			s_transferCredits_response.StatusCode = 403
 			s_transferCredits_response.ErrorMessage = "Login/Senha inválido."
 
@@ -169,8 +141,7 @@ func transferCredits2(s_transferCredits_request s_transferCredits_request_hdr) (
 					s_transferCredits_response.Data.Amount = transferResponse.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLVoucher.Amount
 				}
 				if transferResponse.XMLProvider.XMLPurchaseOnline.XMLPayment.Result != "0" {
-					s_transferCredits_response.StatusCode = 400
-					s_transferCredits_response.ErrorMessage = "Erro na transferencia"
+					s_transferCredits_response.ErrorMessage, s_transferCredits_response.StatusCode = ws.GetErrorMessage(transferResponse.XMLProvider.XMLPurchaseOnline.XMLPayment.Result)
 					return s_transferCredits_response, nil
 				}
 				db.InsertPaymentHistory(dbConn, s_login_credentials.Id, "transfer", "15695", s_transferCredits_request, s_transferCredits_response, requestXML, responseXML, 1)

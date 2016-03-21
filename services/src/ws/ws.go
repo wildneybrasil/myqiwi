@@ -167,6 +167,34 @@ type s_XMLGetLastIDS_hdr struct {
 type s_XMLTerminals_hdr struct {
 	XMLGetLastIds *s_XMLGetLastIDS_hdr `xml:"getLastIds,omitempty"`
 }
+type s_XMLChangePassword struct {
+	NewPassword string `xml:"new-password,omitempty"`
+	Result      string `xml:"result,attr,omitempty"`
+}
+type s_XMLResetPassword struct {
+	Step      string `xml:"step,omitempty"`
+	Email     string `xml:"email,omitempty"`
+	TermId    string `xml:"term-id,omitempty"`
+	TermLogin string `xml:"term-login,omitempty"`
+	Result    string `xml:"result,attr,omitempty"`
+}
+type s_XMLPersons_hdr struct {
+	CreateAccount  *s_XMLCreateAccount  `xml:"createAccount"`
+	ChangePassword *s_XMLChangePassword `xml:"changePassword"`
+	ResetPassword  *s_XMLResetPassword  `xml:"resetPassword"`
+}
+type s_XMLCreateAccount struct {
+	Name        string `xml:"name"`
+	Email       string `xml:"e-mail"`
+	Document    string `xml:"document"`
+	PhoneNumber string `xml:"phone-number"`
+	Password    string `xml:"password"`
+
+	DealerId string `xml:"dealer-id,omitempty"`
+	Result   string `xml:"result,attr,omitempty"`
+	UserId   string `xml:"user-id,omitempty"`
+	PointId  string `xml:"point-id,omitempty"`
+}
 type s_request_data struct {
 	XMLName      xml.Name            `xml:"request"`
 	XMLAuth      s_XMLAuth_hdr       `xml:"auth"`
@@ -174,6 +202,7 @@ type s_request_data struct {
 	XMLAgents    *s_XMLAgents_hdr    `xml:"agents,omitempty"`
 	XMLProvider  *s_XMLProvider_hdr  `xml:"providers,omitempty"`
 	XMLTerminals *s_XMLTerminals_hdr `xml:"terminals,omitempty"`
+	XMLPersons   *s_XMLPersons_hdr   `xml:"persons,omitempty"`
 }
 
 type WSResponse_getBalance_hdr struct {
@@ -185,6 +214,16 @@ type WSResponse_createBill_hdr struct {
 	Result            string          `xml:"result,attr"`
 	ResultDescription string          `xml:"result-description,attr"`
 	XMLAgents         s_XMLAgents_hdr `xml:"agents"`
+}
+type WSResponse_createAccount struct {
+	Result            string           `xml:"result,attr"`
+	ResultDescription string           `xml:"result-description,attr"`
+	XMLPerson         s_XMLPersons_hdr `xml:"persons"`
+}
+type WSResponse_changePassword struct {
+	Result            string           `xml:"result,attr"`
+	ResultDescription string           `xml:"result-description,attr"`
+	XMLPerson         s_XMLPersons_hdr `xml:"persons"`
 }
 type WSResponse_transferCredits_hdr struct {
 	Result            string            `xml:"result,attr"`
@@ -277,7 +316,86 @@ func send(s_credentials *db.Login_credentials_hdr, request *s_request_data) (*st
 
 	return &resultString, &requestString, nil
 }
+func GetErrorMessage(code string) (string, int) {
+	result := ""
+	errorCode := 0
 
+	switch code {
+	case "3":
+		result = "Provedor temporariamente fora de serviço"
+		errorCode = 405
+		break
+	case "150":
+		result = "Falha na autenticação"
+		errorCode = 401
+		break
+	case "151":
+		result = "Pagamento para este provedor foi negado"
+		errorCode = 403
+		break
+	case "155":
+		result = "Não é permitido usar a mesma senha"
+		errorCode = 405
+		break
+	case "202":
+		result = "Erro interno, tente novamente"
+		errorCode = 405
+		break
+	case "216":
+		result = "Falha ao confirmar transação"
+		errorCode = 405
+		break
+	case "210":
+		result = "Transação nao encontrada"
+		errorCode = 405
+		break
+	case "246":
+		result = "Terminal esta sendo utilizado por outro computador"
+		errorCode = 405
+		break
+	case "300":
+		result = "Erro inexperado"
+		errorCode = 405
+		break
+	case "500":
+		result = "Recebimento negado para este pagamento"
+		errorCode = 405
+		break
+	case "700":
+		result = "Terminal bloqueado"
+		errorCode = 405
+		break
+	case "701":
+		result = "Este servico atingiu o limite diario"
+		errorCode = 405
+		break
+	case "702":
+		result = "Este login ja existe"
+		errorCode = 405
+		break
+	case "703":
+		result = "Erro ao criar conta ( 703 )"
+		errorCode = 405
+		break
+	case "704":
+		result = "Erro ao criar conta ( 704 )"
+		errorCode = 405
+		break
+	case "705":
+		result = "Erro ao criar conta ( 705 )"
+		errorCode = 405
+		break
+	case "220":
+		result = "Erro na transferencia"
+		errorCode = 500
+		break
+	default:
+		result = "Internal server error ( Erro: " + code + ")"
+		errorCode = 500
+		break
+	}
+	return result, errorCode
+}
 func GetBalance(s_credentials *db.Login_credentials_hdr) (*string, *string, error) {
 	s_response_getBalance := WSResponse_getBalance_hdr{}
 
@@ -297,9 +415,93 @@ func GetBalance(s_credentials *db.Login_credentials_hdr) (*string, *string, erro
 		return nil, nil, err
 	}
 	fmt.Println("Codigo " + s_response_getBalance.Result)
+	if s_response_getBalance.Result != "0" {
+
+		return nil, nil, fmt.Errorf("Error")
+	}
 	fmt.Println("Balance " + s_response_getBalance.XMLAgents.GetBalance.Balance)
 
 	return &s_response_getBalance.XMLAgents.GetBalance.Balance, &s_response_getBalance.XMLAgents.GetBalance.Overdraft, nil
+}
+
+func CreateAccount(name string, email string, document string, phone string, password string) (*WSResponse_createAccount, error) {
+	s_response := WSResponse_createAccount{}
+
+	requestType := s_request_data{}
+	requestType.XMLPersons = &s_XMLPersons_hdr{}
+	requestType.XMLPersons.CreateAccount = &s_XMLCreateAccount{}
+	requestType.XMLPersons.CreateAccount.Name = name
+	requestType.XMLPersons.CreateAccount.Email = email
+	requestType.XMLPersons.CreateAccount.Document = document
+	requestType.XMLPersons.CreateAccount.PhoneNumber = splitCelDDD(phone)
+	requestType.XMLPersons.CreateAccount.Password = password
+
+	s_credentials := db.Login_credentials_hdr{}
+	s_credentials.TerminalLogin = "ttt2"
+	s_credentials.TerminalPassword = "4995EA0596369F512A0334986E824C8A"
+	s_credentials.TerminalId = "269"
+	s_credentials.TerminalSerial = "2134"
+
+	result, _, err := send(&s_credentials, &requestType)
+	if err != nil {
+		return nil, err
+	}
+
+	//	fmt.Println(result)
+	if err := xml.NewDecoder(strings.NewReader(*result)).Decode(&s_response); err != nil {
+		return nil, err
+	}
+
+	return &s_response, nil
+}
+func ResetPassword(email string, termId string, termLogin string) (*WSResponse_changePassword, error) {
+	s_response := WSResponse_changePassword{}
+
+	requestType := s_request_data{}
+	requestType.XMLPersons = &s_XMLPersons_hdr{}
+	requestType.XMLPersons.ResetPassword = &s_XMLResetPassword{}
+	requestType.XMLPersons.ResetPassword.Email = email
+	requestType.XMLPersons.ResetPassword.TermId = termId
+	requestType.XMLPersons.ResetPassword.TermLogin = termLogin
+	requestType.XMLPersons.ResetPassword.Step = "1"
+
+	s_credentials2 := db.Login_credentials_hdr{}
+	s_credentials2.TerminalLogin = "ttt2"
+	s_credentials2.TerminalPassword = "4995EA0596369F512A0334986E824C8A"
+	s_credentials2.TerminalId = "269"
+	s_credentials2.TerminalSerial = "2134"
+
+	result, _, err := send(&s_credentials2, &requestType)
+	if err != nil {
+		return nil, err
+	}
+
+	//	fmt.Println(result)
+	if err := xml.NewDecoder(strings.NewReader(*result)).Decode(&s_response); err != nil {
+		return nil, err
+	}
+
+	return &s_response, nil
+}
+func ChangePassword(s_credentials *db.Login_credentials_hdr, password string) (*WSResponse_changePassword, error) {
+	s_response := WSResponse_changePassword{}
+
+	requestType := s_request_data{}
+	requestType.XMLPersons = &s_XMLPersons_hdr{}
+	requestType.XMLPersons.ChangePassword = &s_XMLChangePassword{}
+	requestType.XMLPersons.ChangePassword.NewPassword = password
+
+	result, _, err := send(s_credentials, &requestType)
+	if err != nil {
+		return nil, err
+	}
+
+	//	fmt.Println(result)
+	if err := xml.NewDecoder(strings.NewReader(*result)).Decode(&s_response); err != nil {
+		return nil, err
+	}
+
+	return &s_response, nil
 }
 func GetProvider(s_credentials *db.Login_credentials_hdr) (*WSResponse_getProvider_hdr, error) {
 	fmt.Println("GET PROVIDER")
@@ -567,6 +769,13 @@ func DoPaymentTel3(s_credentials *db.Login_credentials_hdr, currentId string, se
 
 	currentDate := arrow.Now().CFormat("%Y-%m-%dT%H:%M:%S")
 
+	if currentId == "" {
+		lastId, _ := GetLastID(s_credentials)
+		icurrentId, _ := strconv.ParseInt(lastId.XMLTerminals.XMLGetLastIds.XMLLastPayment.Id, 10, 0)
+		icurrentId = icurrentId + 1
+		currentId = strconv.Itoa(int(icurrentId))
+
+	}
 	requestType := s_request_data{}
 	requestType.XMLProvider = &s_XMLProvider_hdr{}
 	requestType.XMLProvider.XMLPurchaseOnline = &s_XMLPurchaseOnline{}

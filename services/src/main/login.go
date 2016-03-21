@@ -2,15 +2,17 @@
 package main
 
 import (
+	"crypto/md5"
 	"db"
 	b64 "encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"redis"
-
 	"notification"
 	"random"
+	"redis"
 	"time"
+	"ws"
 
 	"golang.org/x/crypto/scrypt"
 )
@@ -25,6 +27,7 @@ type s_redis_create_account_hdr struct {
 	Password       string `json:"password"`
 	Name           string `json:"name"`
 	Cel            string `json:"cel"`
+	Document       string `json:"document"`
 	Photo          string `json:"photo"`
 	Salt           string `json:"salt"`
 	ActivationCode string `json:"activationCode"`
@@ -69,6 +72,7 @@ type s_login_create_request_hdr struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 	Name     string `json:"name"`
+	Document string `json:"document"`
 	Cel      string `json:"cel"`
 	Photo    string `json:"photo"`
 }
@@ -85,20 +89,52 @@ type s_login_response_hdr struct {
 	Data s_login_response_data_hdr `json:"data,omitempty"`
 }
 
+func GetMD5Hash(text string) string {
+	hasher := md5.New()
+	hasher.Write([]byte(text))
+	return hex.EncodeToString(hasher.Sum(nil))
+}
 func createLogin(s_login_create_request s_login_create_request_hdr) (s_login_create_response s_login_create_response_hdr, err error) {
-	//	defer func() {
-	//		if r := recover(); r != nil {
-	//			fmt.Println("PANIC - ", r)
-
-	//			err = fmt.Errorf("panic")
-	//		}
-	//	}()
-
 	activationCode := random.RandomNumberString(6)
 	authToken := random.RandomString(64)
-	salt := random.RandomString(32)
 
 	s_login_create_response = s_login_create_response_hdr{}
+
+	if len(s_login_create_request.Cel) == 0 {
+		s_login_create_response.Status = "failed"
+		s_login_create_response.StatusCode = 400
+		s_login_create_response.ErrorMessage = "Faltando numero de celular"
+
+		return s_login_create_response, nil
+	}
+	if len(s_login_create_request.Document) == 0 {
+		s_login_create_response.Status = "failed"
+		s_login_create_response.StatusCode = 400
+		s_login_create_response.ErrorMessage = "Faltando numero do documento"
+
+		return s_login_create_response, nil
+	}
+	if len(s_login_create_request.Email) == 0 {
+		s_login_create_response.Status = "failed"
+		s_login_create_response.StatusCode = 400
+		s_login_create_response.ErrorMessage = "Faltando o email"
+
+		return s_login_create_response, nil
+	}
+	if len(s_login_create_request.Password) == 0 {
+		s_login_create_response.Status = "failed"
+		s_login_create_response.StatusCode = 400
+		s_login_create_response.ErrorMessage = "Faltando a senha"
+
+		return s_login_create_response, nil
+	}
+	if len(s_login_create_request.Name) == 0 {
+		s_login_create_response.Status = "failed"
+		s_login_create_response.StatusCode = 400
+		s_login_create_response.ErrorMessage = "Faltando o nome"
+
+		return s_login_create_response, nil
+	}
 
 	dbConn := db.Connect()
 	defer dbConn.Close()
@@ -113,30 +149,28 @@ func createLogin(s_login_create_request s_login_create_request_hdr) (s_login_cre
 		return s_login_create_response, nil
 	}
 
-	dk, err := scrypt.Key([]byte(s_login_create_request.Password), []byte(salt), 16384, 8, 1, 32)
-	if err != nil {
-		s_login_create_response.Status = "failed"
-		s_login_create_response.StatusCode = 500
-		s_login_create_response.ErrorMessage = "Internal server error"
+	//	result, err := ws.CreateAccount(s_login_create_request.Name, s_login_create_request.Email, "", s_login_create_request.Cel, s_login_create_request.Password)
+	//	if err != nil {
+	//		s_login_create_response.Status = "failed"
+	//		s_login_create_response.StatusCode = 500
+	//		s_login_create_response.ErrorMessage = "Internal server error"
 
-		return s_login_create_response, nil
-	}
-	dkb64Encoded := b64.StdEncoding.EncodeToString([]byte(dk))
-
-	fmt.Println(dkb64Encoded)
+	//		return s_login_create_response, nil
+	//	}
 
 	s_redis := s_redis_create_account_hdr{}
 	s_redis.Name = s_login_create_request.Name
 	s_redis.Cel = s_login_create_request.Cel
 	s_redis.Email = s_login_create_request.Email
 	s_redis.Photo = s_login_create_request.Photo
-	s_redis.Password = dkb64Encoded
-	s_redis.Salt = salt
+	s_redis.Document = s_login_create_request.Document
+	s_redis.Password = s_login_create_request.Password
+	s_redis.Salt = ""
 	s_redis.AuthToken = authToken
 	s_redis.ActivationCode = activationCode
 
 	redisString, _ := json.Marshal(s_redis)
-	redis.Set(s_redis.AuthToken, string(redisString), 10*time.Minute)
+	redis.Set(s_redis.AuthToken, string(redisString), 1000*time.Minute)
 
 	notification.Send(notification.NotificationMessage{"sms", s_login_create_request.Cel, "QIWI - Seu codigo de ativação é: " + activationCode})
 
@@ -147,8 +181,6 @@ func createLogin(s_login_create_request s_login_create_request_hdr) (s_login_cre
 }
 
 func updateUser(s_login_update_request s_login_update_request_hdr) (s_login_create_response s_login_create_response_hdr, err error) {
-	salt := random.RandomString(32)
-
 	s_login_create_response = s_login_create_response_hdr{}
 
 	dbConn := db.Connect()
@@ -164,32 +196,28 @@ func updateUser(s_login_update_request s_login_update_request_hdr) (s_login_crea
 	}
 	dkb64Encoded := ""
 	if s_login_update_request.Password != "" {
-		dk, err := scrypt.Key([]byte(s_login_update_request.Password), []byte(salt), 16384, 8, 1, 32)
-		if err != nil {
+		dkb64Encoded = GetMD5Hash(s_login_update_request.Password)
+
+		wsResult, err := ws.ChangePassword(s_login_credentials, dkb64Encoded)
+
+		if err != nil || wsResult.Result != "0" {
 			s_login_create_response.Status = "failed"
 			s_login_create_response.StatusCode = 500
-			s_login_create_response.ErrorMessage = "Internal server error"
+			s_login_create_response.ErrorMessage = "Error"
 
 			return s_login_create_response, nil
 		}
-		dkb64Encoded = b64.StdEncoding.EncodeToString([]byte(dk))
 	}
 
 	fmt.Println(dkb64Encoded)
 
-	db.UpdateUser(dbConn, s_login_credentials.Id, s_login_update_request.Name, s_login_update_request.Photo, s_login_update_request.Email, dkb64Encoded, salt)
+	db.UpdateUser(dbConn, s_login_credentials.Id, s_login_update_request.Photo, dkb64Encoded)
+	//	db.UpdateUser(dbConn, s_login_credentials.Id, s_login_update_request.Name, s_login_update_request.Photo, s_login_update_request.Email, dkb64Encoded, salt)
 
 	return s_login_create_response, nil
 }
 func CheckPassword(source_password string, hash_password string, salt string) bool {
-	//verifica senha
-	dk, err := scrypt.Key([]byte(source_password), []byte(salt), 16384, 8, 1, 32)
-	if err != nil {
-		return false
-	}
-	dkb64Encoded := b64.StdEncoding.EncodeToString([]byte(dk))
-
-	if dkb64Encoded == hash_password {
+	if GetMD5Hash(source_password) == hash_password {
 		return true
 	}
 	return false
@@ -230,7 +258,7 @@ func login(s_login_request s_login_request_hdr) (s_login_response s_login_respon
 	if s_login_credentials.FailedLoginCount > MAXLOGIN {
 		s_login_response.Status = "failed"
 		s_login_response.StatusCode = 403
-		s_login_response.ErrorMessage = "Tentativas excedidas"
+		s_login_response.ErrorMessage = "Conta bloqueada, numero de tentativas excedidas. voce precisa redefinir sua senha."
 
 		return s_login_response, nil
 	}
@@ -242,31 +270,22 @@ func login(s_login_request s_login_request_hdr) (s_login_response s_login_respon
 		return s_login_response, nil
 	}
 
-	dk, err := scrypt.Key([]byte(s_login_request.Password), []byte(s_login_credentials.PasswordSalt), 16384, 8, 1, 32)
+	s_login_credentials.Password = GetMD5Hash(s_login_request.Password)
+	s_login_credentials.TerminalPassword = GetMD5Hash(s_login_request.Password)
+
+	_, _, err = ws.GetBalance(s_login_credentials)
 	if err != nil {
-		s_login_response.Status = "failed"
-		s_login_response.StatusCode = 403
-		s_login_response.ErrorMessage = "Login/Senha inválido."
-
-		return s_login_response, nil
-	}
-	dkb64Encoded := b64.StdEncoding.EncodeToString([]byte(dk))
-
-	fmt.Println(dkb64Encoded)
-
-	if dkb64Encoded == s_login_credentials.Password {
-		db.ResetFailedLoginOfEmail(dbConn, s_login_request.Email)
-		db.InsertToken(dbConn, s_login_credentials.Id, authToken)
-
-		s_login_response.Status = "success"
-		s_login_response.Data.AuthToken = authToken
-	} else {
 		db.IncreaseFailedLoginOfEmail(dbConn, s_login_request.Email)
 
 		s_login_response.Status = "failed"
 		s_login_response.StatusCode = 403
 		s_login_response.ErrorMessage = "Login/Senha inválido"
+	} else {
+		db.ResetFailedLoginOfEmail(dbConn, s_login_request.Email)
+		db.InsertToken(dbConn, s_login_credentials.Id, authToken)
 
+		s_login_response.Status = "success"
+		s_login_response.Data.AuthToken = authToken
 	}
 
 	return s_login_response, nil
@@ -304,7 +323,33 @@ func activateAccount(s_request s_activate_request_hdr) (result s_status, err err
 		panic(err)
 	}
 	if s_request.ActivationCode == s_redis.ActivationCode {
-		id, err := db.CreateAccount(dbConn, s_redis.Email, s_redis.Cel, s_redis.Password, s_redis.Salt, s_redis.Name, s_redis.Photo)
+		wsResult, err := ws.CreateAccount(s_redis.Name, s_redis.Email, s_redis.Document, s_redis.Cel, s_redis.Password)
+
+		if err != nil {
+			result.Status = "failed"
+			result.StatusCode = 500
+			result.ErrorMessage = "Internal server error"
+
+			return result, nil
+		}
+		if wsResult.Result != "0" {
+			result.Status = "failed"
+			result.StatusCode = 500
+			result.ErrorMessage = "Internal server error"
+
+			return result, nil
+
+		}
+		if wsResult.XMLPerson.CreateAccount.Result != "0" {
+			result.Status = "failed"
+			result.StatusCode = 500
+			result.ErrorMessage = "Internal server error"
+
+			return result, nil
+
+		}
+
+		id, err := db.CreateAccount(dbConn, s_redis.Email, s_redis.Cel, GetMD5Hash(s_redis.Password), "", s_redis.Name, s_redis.Photo, s_redis.Email, GetMD5Hash(s_redis.Password), wsResult.XMLPerson.CreateAccount.PointId)
 		if err != nil {
 			panic(err)
 		}
@@ -368,16 +413,24 @@ func resendActivationCode(s_request s_activate_request_hdr) (result s_status, er
 }
 
 func lostPassword(s_lost_password s_lost_password_hdr) {
-	recoverToken := random.RandomString(64)
+	dbConn := db.Connect()
+	defer dbConn.Close()
 
-	s_redis := s_redis_lost_password_hdr{}
-	s_redis.Email = s_lost_password.Email
-	s_redis.RecoverToken = recoverToken
+	s_user_info, err := db.GetLoginInfoByEmail(dbConn, s_lost_password.Email)
 
-	redisString, _ := json.Marshal(s_redis)
-	redis.Set(s_redis.Email, string(redisString), 1000*time.Minute)
+	if err == nil {
+		ws.ResetPassword(s_lost_password.Email, s_user_info.TerminalId, s_user_info.TerminalLogin)
+	}
+	//	recoverToken := random.RandomString(64)
 
-	notification.Send(notification.NotificationMessage{"email", s_lost_password.Email, "\n\nhttp://ec2-54-207-24-178.sa-east-1.compute.amazonaws.com/password/#/password/" + s_lost_password.Email + "/" + recoverToken})
+	//	s_redis := s_redis_lost_password_hdr{}
+	//	s_redis.Email = s_lost_password.Email
+	//	s_redis.RecoverToken = recoverToken
+
+	//	redisString, _ := json.Marshal(s_redis)
+	//	redis.Set(s_redis.Email, string(redisString), 1000*time.Minute)
+
+	//	notification.Send(notification.NotificationMessage{"email", s_lost_password.Email, "\n\nhttp://ec2-54-207-24-178.sa-east-1.compute.amazonaws.com/password/#/password/" + s_lost_password.Email + "/" + recoverToken})
 
 }
 func changeLPPassword(s_lost_password s_lost_password_hdr) (result s_status) {
