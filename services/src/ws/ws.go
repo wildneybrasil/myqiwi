@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 
@@ -17,7 +18,7 @@ import (
 )
 
 var (
-	url = "https://189.36.23.69:8443/term2/xml.ashx"
+	url = os.Getenv("QIWI_SERVER")
 )
 
 type s_XMLAuth_hdr struct {
@@ -90,6 +91,7 @@ type s_XMLPaymentExtras struct {
 	Ev_reqtype           string `xml:"ev_reqtype,attr,omitempty"`
 	Ev_scan              string `xml:"ev_scan,attr,omitempty"`
 	Ev_nsum              string `xml:"ev_nsum,attr,omitempty"`
+	Ev_combo1            string `xml:"ev_combo1,attr,omitempty"`
 	Ev_nid               string `xml:"ev_nid,attr,omitempty"`
 	Ev_force_amount      string `xml:"ev_force_amount,attr,omitempty"`
 	Disp1                string `xml:"disp1,attr,omitempty"`
@@ -230,6 +232,11 @@ type WSResponse_transferCredits_hdr struct {
 	ResultDescription string            `xml:"result-description,attr"`
 	XMLProvider       s_XMLProvider_hdr `xml:"providers"`
 }
+type WSResponse_hystory_hdr struct {
+	Result            string            `xml:"result,attr"`
+	ResultDescription string            `xml:"result-description,attr"`
+	XMLProvider       s_XMLProvider_hdr `xml:"providers"`
+}
 type WSResponse_lastGetID_hdr struct {
 	Result            string             `xml:"result,attr"`
 	ResultDescription string             `xml:"result-description,attr"`
@@ -249,6 +256,20 @@ type s_XMLGetProviderROW_hdr struct {
 type s_XMLGetProvider_hdr struct {
 	Row []s_XMLGetProviderROW_hdr `xml:"row"`
 }
+type s_XMLHistPayment struct {
+	Id          string `xml:"id,attr,omitempty"`
+	ServiceName string `xml:"serviceName,attr,omitempty"`
+	Date        string `xml:"date,attr,omitempty"`
+	Amount      string `xml:"amount,attr,omitempty"`
+	Account     string `xml:"account,attr,omitempty"`
+	Status      string `xml:"status,attr,omitempty"`
+	Nsu         string `xml:"nsu,attr,omitempty"`
+}
+type s_XMLGetPaymentsHistory struct {
+	FromDate string              `xml:"from-date,omitempty"`
+	ToDate   string              `xml:"to-date,omitempty"`
+	Payment  *[]s_XMLHistPayment `xml:"payment,omitempty"`
+}
 type s_XMLPurchaseOnline struct {
 	Result     string       `xml:"result,attr,omitempty"`
 	Status     string       `xml:"status,attr,omitempty"`
@@ -259,6 +280,7 @@ type s_XMLProvider_hdr struct {
 	XMLCheckPaymentRequisites *s_XMLCheckPaymentRequisites `xml:"checkPaymentRequisites,omitempty"`
 	XMLPurchaseOnline         *s_XMLPurchaseOnline         `xml:"purchaseOnline,omitempty"`
 	XMLGetNomenclature        *s_XMLGetNomenclature        `xml:"getNomenclature,omitempty"`
+	XMLGetPaymentsHistory     *s_XMLGetPaymentsHistory     `xml:"getPaymentsHistory,omitempty"`
 }
 
 type s_XMLGetNomenclature struct {
@@ -316,10 +338,22 @@ func send(s_credentials *db.Login_credentials_hdr, request *s_request_data) (*st
 
 	return &resultString, &requestString, nil
 }
+func GetTelRAW(tel string) string {
+	tel = strings.Replace(tel, "(", "", -1)
+	tel = strings.Replace(tel, ")", "", -1)
+	tel = strings.Replace(tel, " ", "", -1)
+	tel = strings.Replace(tel, "-", "", -1)
+	return tel
+
+}
 func GetErrorMessage(code string) (string, int) {
 	result := ""
 	errorCode := 0
 
+	//	if len(code) > 0 {
+	//		errorCode64, _ := strconv.ParseInt(code, 10, 0)
+	//		errorCode = int(errorCode64)
+	//	}
 	switch code {
 	case "3":
 		result = "Provedor temporariamente fora de serviço"
@@ -433,12 +467,16 @@ func CreateAccount(name string, email string, document string, phone string, pas
 	requestType.XMLPersons.CreateAccount.Name = name
 	requestType.XMLPersons.CreateAccount.Email = email
 	requestType.XMLPersons.CreateAccount.Document = document
-	requestType.XMLPersons.CreateAccount.PhoneNumber = splitCelDDD(phone)
+	requestType.XMLPersons.CreateAccount.PhoneNumber = splitCelDDD(GetTelRAW(phone))
 	requestType.XMLPersons.CreateAccount.Password = password
 
 	s_credentials := db.Login_credentials_hdr{}
-	s_credentials.TerminalLogin = "ttt2"
-	s_credentials.TerminalPassword = "4995EA0596369F512A0334986E824C8A"
+	//	s_credentials.TerminalLogin = "ttt2"
+	//	s_credentials.TerminalPassword = "4995EA0596369F512A0334986E824C8A"
+	//	s_credentials.TerminalId = "269"
+	//	s_credentials.TerminalSerial = "2134"
+	s_credentials.TerminalLogin = "qwt.su"
+	s_credentials.TerminalPassword = "6B63DA2FACAC6FED58481DCBE3699475"
 	s_credentials.TerminalId = "269"
 	s_credentials.TerminalSerial = "2134"
 
@@ -523,7 +561,7 @@ func GetProvider(s_credentials *db.Login_credentials_hdr) (*WSResponse_getProvid
 		return nil, err
 	}
 
-	fmt.Printf("COUNT %d\n", s_response_getProvider.XMLProvider.XMLGetProvider.Row[0].FiscalName)
+	//	fmt.Printf("COUNT %d\n", s_response_getProvider.XMLProvider.XMLGetProvider.Row[0].FiscalName)
 	return &s_response_getProvider, nil
 
 }
@@ -549,7 +587,7 @@ func CreateBill(s_credentials *db.Login_credentials_hdr, amount string) (*WSResp
 		return nil, err
 	}
 
-	fmt.Println("BOLETO ID: " + s_response_createBill.XMLAgents.CreateBill.BoletoBill.Id)
+	//	fmt.Println("BOLETO ID: " + s_response_createBill.XMLAgents.CreateBill.BoletoBill.Id)
 	return &s_response_createBill, nil
 
 }
@@ -627,6 +665,30 @@ func TransferCredits1(s_credentials *db.Login_credentials_hdr, toAccount string,
 
 	return &s_response_createBill, nil
 }
+func GetHistory(s_credentials *db.Login_credentials_hdr) (*WSResponse_hystory_hdr, error) {
+	fmt.Println("GET CREATE BILL")
+
+	s_response_createBill := WSResponse_hystory_hdr{}
+	s_response_createBill.XMLProvider.XMLGetPaymentsHistory = &s_XMLGetPaymentsHistory{}
+	s_response_createBill.XMLProvider.XMLGetPaymentsHistory.Payment = &[]s_XMLHistPayment{}
+
+	requestType := s_request_data{}
+	requestType.XMLProvider = &s_XMLProvider_hdr{}
+	requestType.XMLProvider.XMLGetPaymentsHistory = &s_XMLGetPaymentsHistory{}
+
+	result, _, err := send(s_credentials, &requestType)
+	if err != nil {
+		return nil, err
+	}
+
+	//	fmt.Println(result)
+
+	if err := xml.NewDecoder(strings.NewReader(*result)).Decode(&s_response_createBill); err != nil {
+		return nil, err
+	}
+
+	return &s_response_createBill, nil
+}
 func splitCelDDD(phone string) string {
 	ddd := phone[0:2]
 	cel := phone[2:]
@@ -635,6 +697,7 @@ func splitCelDDD(phone string) string {
 }
 func DoPaymentTel1(s_credentials *db.Login_credentials_hdr, toAccount string, serviceId string, Ev_force string, Ev_step string, Ev_isnom string, Ev_reqtype string) (*WSResponse_transferCredits_hdr, error) {
 	fmt.Println("GET CREATE BILL")
+	toAccount = strings.Replace(toAccount, " ", "", -1)
 
 	s_response_createBill := WSResponse_transferCredits_hdr{}
 
@@ -676,6 +739,7 @@ func DoPaymentTel1(s_credentials *db.Login_credentials_hdr, toAccount string, se
 }
 func DoPaymentTel2(s_credentials *db.Login_credentials_hdr, currentId string, toAccount string, serviceId string, selectedAmount string) (*WSResponse_transferCredits_hdr, error) {
 	fmt.Println("GET CREATE BILL")
+	toAccount = strings.Replace(toAccount, " ", "", -1)
 
 	s_response_createBill := WSResponse_transferCredits_hdr{}
 
@@ -764,6 +828,7 @@ func DoPaymentGames2(s_credentials *db.Login_credentials_hdr, toAccount string, 
 }
 func DoPaymentTel3(s_credentials *db.Login_credentials_hdr, currentId string, session string, toAccount string, serviceId string, selectedAmount string) (*WSResponse_transferCredits_hdr, *string, *string, error) {
 	fmt.Println("GET CREATE BILL")
+	toAccount = strings.Replace(toAccount, " ", "", -1)
 
 	s_response_createBill := WSResponse_transferCredits_hdr{}
 
@@ -787,7 +852,7 @@ func DoPaymentTel3(s_credentials *db.Login_credentials_hdr, currentId string, se
 	requestType.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLPaymentTo.Amount = selectedAmount
 	requestType.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLPaymentTo.Currency = "986"
 	requestType.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLPaymentFrom.Type = "2"
-	requestType.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLPaymentTo.Account = toAccount
+	requestType.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLPaymentTo.Account = splitCelDDD(toAccount)
 	requestType.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLPaymentTo.Service = serviceId
 	requestType.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLPaymentReceipt.Date = currentDate
 	requestType.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLPaymentReceipt.Id = currentId

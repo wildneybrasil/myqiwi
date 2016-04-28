@@ -2,8 +2,11 @@
 package main
 
 import (
+	"bufio"
 	"db"
+	"encoding/base64"
 	"fmt"
+	"os"
 	"ws"
 )
 
@@ -19,6 +22,7 @@ type s_provider_response_row_hdr struct {
 	PrvId       string `json:"prvId"`
 	ReceiptName string `json:"receiptName"`
 	ShortName   string `json:"shortName"`
+	//	Logo        string `json:"logo"`
 }
 type s_provider_response_service_hdr struct {
 	ServiceName string                        `json:"serviceName"`
@@ -35,12 +39,12 @@ type s_provider_response_hdr struct {
 }
 
 type s_history_data_item_hdr struct {
-	Timestamp    int    `json:"timestamp"`
-	PaymentType  string `json:"paymentType"`
-	CategoryName string `json:"categoryName"`
-	ServiceName  string `json:"serviceName"`
-	Rcpt         string `json:"rcpt"`
-	Amount       string `json:"amount"`
+	ServiceName string `json:"serviceName,omitempty"`
+	Rcpt        string `json:"rcpt,omitempty"`
+	Amount      string `json:"amount,omitempty"`
+	NSU         string `json:"nsu,omitempty"`
+	Date        string `json:"date,omitempty"`
+	Status      string `json:"status,omitempty"`
 }
 
 type s_history_response_data_hdr struct {
@@ -64,22 +68,18 @@ func getHistoryOfUser(s_history_request s_history_request_hdr) (s_history_respon
 
 		return s_history_response, nil
 	}
-	list, err := db.ListHistory(dbConn, s_login_credentials.Id)
-	if err != nil {
-		s_history_response.StatusCode = 500
-		s_history_response.ErrorMessage = "Internal server error"
+	wsResult, err := ws.GetHistory(s_login_credentials)
 
-		return s_history_response, nil
-	}
-
-	for _, v := range *list {
+	array := *wsResult.XMLProvider.XMLGetPaymentsHistory.Payment
+	for k, v := range array {
 		item := s_history_data_item_hdr{}
 		item.ServiceName = v.ServiceName
-		item.Timestamp = v.Timestamp
-		item.CategoryName = v.CategoryName
-		item.Rcpt = v.Rcpt
+		item.Rcpt = v.Account
 		item.Amount = v.Amount
-		item.PaymentType = v.PaymentType
+		item.Status = v.Status
+		item.NSU = v.Nsu
+		item.Date = v.Date
+		fmt.Println(array[k].ServiceName)
 
 		s_history_response.Data.Item = append(s_history_response.Data.Item, item)
 	}
@@ -121,6 +121,7 @@ func getProvider(s_provider_request s_provider_request_hdr) (s_provider_response
 						item.ServiceName = s.Name
 						item.Type = s.Type
 						item.LongName = s.LongName
+
 					}
 				}
 			}
@@ -143,6 +144,7 @@ func getProvider(s_provider_request s_provider_request_hdr) (s_provider_response
 							row.ReceiptName = item2.ReceiptName
 							row.ShortName = item2.ShortName
 							row.PrvId = item2.PrvId
+							//							row.Logo = readLogo(item2.PrvId)
 
 							item2.PrvId = "0"
 							providers = append(providers, row)
@@ -167,4 +169,34 @@ func getProvider(s_provider_request s_provider_request_hdr) (s_provider_response
 		s_provider_response.ErrorMessage = "Login/Senha inválido"
 	}
 	return s_provider_response, nil
+}
+func readLogo(prvId string) string {
+	filename := "/var/logos/" + prvId + ".png"
+
+	fi, err := os.Open(filename)
+	if err != nil {
+		fmt.Println(err)
+		return ""
+	}
+	defer func() {
+		if err := fi.Close(); err != nil {
+		}
+	}()
+
+	fInfo, err := fi.Stat()
+	if err != nil {
+		fmt.Println(err)
+		return ""
+
+	}
+	var size int64 = fInfo.Size()
+	buf := make([]byte, size)
+
+	r := bufio.NewReader(fi)
+
+	r.Read(buf)
+
+	imgBase64Str := base64.StdEncoding.EncodeToString(buf)
+
+	return imgBase64Str
 }

@@ -4,6 +4,7 @@ package main
 import (
 	"db"
 	"fmt"
+	"notification"
 	"strconv"
 	"strings"
 	"ws"
@@ -167,14 +168,14 @@ func payment1(s_payment_request s_payment_request_hdr) (s_payment_response s_pay
 		case "Credisan":
 			break
 		case "Software Express":
-			reqType = "1"
+			reqType = "4"
 			isNom = ""
 			forceAmount = "true"
 			break
 		case "Pin Offline":
 			break
 		case "RV":
-			reqType = "4"
+			reqType = "2"
 			break
 		case "QIWI":
 			break
@@ -197,12 +198,16 @@ func payment1(s_payment_request s_payment_request_hdr) (s_payment_response s_pay
 				s_payment_response.ErrorMessage = "Internal server error"
 				return s_payment_response, nil
 			}
-			if transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Result != "0" || transferResponse.XMLProvider.XMLCheckPaymentRequisites.Result != "0" {
+			if transferResponse.XMLProvider.XMLCheckPaymentRequisites.Result != "0" {
 				s_payment_response.StatusCode = 400
-				s_payment_response.ErrorMessage = "Internal server error"
+				s_payment_response.ErrorMessage, s_payment_response.StatusCode = ws.GetErrorMessage(transferResponse.XMLProvider.XMLCheckPaymentRequisites.Result)
 				return s_payment_response, nil
 			}
-
+			if transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Result != "0" {
+				s_payment_response.StatusCode = 400
+				s_payment_response.ErrorMessage, s_payment_response.StatusCode = ws.GetErrorMessage(transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Result)
+				return s_payment_response, nil
+			}
 			strNominalsValue1 := transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp1
 			strNominalsValue3 := transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp3
 			V1 := strings.Split(strNominalsValue1, ";")
@@ -234,6 +239,34 @@ func payment1(s_payment_request s_payment_request_hdr) (s_payment_response s_pay
 				break
 			case "Software Express":
 				s_payment_response.Data.Session = ""
+				strNominalsValue1 := transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_combo1
+				V1 := strings.Split(strNominalsValue1, "|")
+
+				//				s_payment_response.Data = &s_payment_response_data_hdr{}
+				//				s_payment_response.Data.Nominals = &s_values_response_hdr{}
+
+				s_payment_response.Data.Nominals.Items = []s_values_item_hdr{}
+
+				for k, _ := range V1 {
+					V2 := strings.Split(V1[k], ";")
+
+					item := s_values_item_hdr{}
+
+					if len(V2) >= 2 {
+						amount := V2[2]
+						amountFloat, _ := strconv.ParseFloat(amount, 64)
+						amountString := fmt.Sprintf("%.02f", amountFloat)
+
+						item.Amount = amountString
+						item.Id = V2[1]
+						item.Text = V2[0]
+
+						if amountFloat > 0.1 {
+							s_payment_response.Data.Nominals.Items = append(s_payment_response.Data.Nominals.Items, item)
+						}
+					}
+				}
+
 				break
 			case "Pin Offline":
 				s_payment_response.Data.Session = transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp4
@@ -434,6 +467,9 @@ func payment2(s_payment_request s_payment_request_hdr) (s_payment_response s_pay
 
 					}
 				}
+				cel := strings.Replace(s_payment_request.Rcpt, " ", "", -1)
+				notification.Send(notification.NotificationMessage{"sms", cel, "PIN: " + s_payment_response.Data.PIN + " SERIAL: " + s_payment_response.Data.Serial})
+
 				break
 			case "RV":
 			case "QIWI":

@@ -20,6 +20,7 @@ type Login_credentials_hdr struct {
 	Cel              string
 	Photo            string
 	Name             string
+	Document         string
 	Password         string
 	Email            string
 	PasswordSalt     string
@@ -282,7 +283,7 @@ func GetLoginInfoByEmail(db *sql.DB, email string) (*Login_credentials_hdr, erro
 	return &s_login_credentials, nil
 }
 func GetLoginInfoById(db *sql.DB, id int) (*Login_credentials_hdr, error) {
-	stmt, err := db.Prepare("select  id, password, password_salt, terminal_login, terminal_id , terminal_serial, terminal_password, login_failed_count, status, cel, email,name,photo  from user_credentials where id=$1")
+	stmt, err := db.Prepare("select  id, password, password_salt, terminal_login, terminal_id , terminal_serial, terminal_password, login_failed_count, status, cel, email,name,photo, document  from user_credentials where id=$1")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -291,7 +292,7 @@ func GetLoginInfoById(db *sql.DB, id int) (*Login_credentials_hdr, error) {
 	s_login_credentials := Login_credentials_hdr{}
 
 	var photo []byte
-	err = stmt.QueryRow(id).Scan(&s_login_credentials.Id, &s_login_credentials.Password, &s_login_credentials.PasswordSalt, &s_login_credentials.TerminalLogin, &s_login_credentials.TerminalId, &s_login_credentials.TerminalSerial, &s_login_credentials.TerminalPassword, &s_login_credentials.FailedLoginCount, &s_login_credentials.Status, &s_login_credentials.Cel, &s_login_credentials.Email, &s_login_credentials.Name, &photo)
+	err = stmt.QueryRow(id).Scan(&s_login_credentials.Id, &s_login_credentials.Password, &s_login_credentials.PasswordSalt, &s_login_credentials.TerminalLogin, &s_login_credentials.TerminalId, &s_login_credentials.TerminalSerial, &s_login_credentials.TerminalPassword, &s_login_credentials.FailedLoginCount, &s_login_credentials.Status, &s_login_credentials.Cel, &s_login_credentials.Email, &s_login_credentials.Name, &photo, &s_login_credentials.Document)
 
 	if len(photo) > 0 {
 		s_login_credentials.Photo = string(photo)
@@ -421,7 +422,7 @@ func FindServiceByLongName(services *[]Services_hdr, longName string) *Services_
 func ListServicos(db *sql.DB) (*[]Services_hdr, error) {
 	result := make([]Services_hdr, 0)
 
-	stmt, err := db.Prepare("select i.longName, i.rv_id, s.name, s.type from servicos s, servicos_items i where i.servico_id=s.id")
+	stmt, err := db.Prepare("select i.longName, i.rv_id, s.name, s.type from servicos s, servicos_items i where i.servico_id=s.id order by i.longName")
 	if err != nil {
 		log.Fatal(err)
 	}

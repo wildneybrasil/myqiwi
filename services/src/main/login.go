@@ -41,6 +41,10 @@ type s_cel_info_hdr struct {
 	AuthToken string `json:"authToken"`
 	Cel       string `json:"cel"`
 }
+type s_contact_hdr struct {
+	AuthToken string `json:"authToken"`
+	Text      string `json:"text"`
+}
 type s_login_request_hdr struct {
 	Email    string `json:"email"`
 	Cel      string `json:"cel"`
@@ -51,10 +55,12 @@ type s_activate_request_hdr struct {
 	ActivationCode string `json:"activationCode"`
 }
 type s_login_info_response_data_hdr struct {
-	Name  string `json:"name",omitempty`
-	Cel   string `json:"cel",omitempty`
-	Photo string `json:"photo",omitempty`
-	Email string `json:"email",omitempty`
+	Name       string `json:"name",omitempty`
+	Cel        string `json:"cel",omitempty`
+	Photo      string `json:"photo",omitempty`
+	Email      string `json:"email",omitempty`
+	Document   string `json:"document",omitempty`
+	TerminalId string `json:"terminalId",omitempty`
 }
 type s_login_info_response_hdr struct {
 	s_status
@@ -172,7 +178,7 @@ func createLogin(s_login_create_request s_login_create_request_hdr) (s_login_cre
 	redisString, _ := json.Marshal(s_redis)
 	redis.Set(s_redis.AuthToken, string(redisString), 1000*time.Minute)
 
-	notification.Send(notification.NotificationMessage{"sms", s_login_create_request.Cel, "QIWI - Seu codigo de ativação é: " + activationCode})
+	notification.Send(notification.NotificationMessage{"sms", ws.GetTelRAW(s_login_create_request.Cel), "QIWI - Seu codigo de ativação é: " + activationCode})
 
 	s_login_create_response.Data = &s_login_response_data_hdr{}
 	s_login_create_response.Data.AuthToken = authToken
@@ -407,7 +413,7 @@ func resendActivationCode(s_request s_activate_request_hdr) (result s_status, er
 
 	redis.Set(s_redis.AuthToken, string(redisBytes), 1000*time.Minute)
 
-	notification.Send(notification.NotificationMessage{"sms", s_redis.Cel, "QIWI - Seu codigo de ativação é: " + s_redis.ActivationCode})
+	notification.Send(notification.NotificationMessage{"sms", ws.GetTelRAW(s_redis.Cel), "QIWI - Seu codigo de ativação é: " + s_redis.ActivationCode})
 
 	return result, nil
 }
@@ -614,6 +620,8 @@ func getMyInfo(s_cel_info s_cel_info_hdr) (s_login_info s_login_info_response_hd
 			s_login_info.Data.Photo = userInfo.Photo
 			s_login_info.Data.Name = userInfo.Name
 			s_login_info.Data.Email = userInfo.Email
+			s_login_info.Data.Document = userInfo.Document
+			s_login_info.Data.TerminalId = userInfo.TerminalId
 
 		}
 	} else {

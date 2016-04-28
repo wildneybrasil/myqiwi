@@ -12,6 +12,7 @@ import (
 type s_values_item_hdr struct {
 	Id     string `json:"id,attr,omitempty"`
 	Amount string `json:"amount,attr,omitempty"`
+	Text   string `json:"text,attr,omitempty"`
 }
 type s_values_response_hdr struct {
 	Items []s_values_item_hdr `json:"items,omitempty"`

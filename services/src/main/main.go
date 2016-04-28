@@ -5,16 +5,19 @@ import (
 	"db"
 	"encoding/json"
 	"fmt"
-	"html"
+	//	"html"
 	"io"
-	"log"
+	//	"log"
+
+	"github.com/gin-gonic/gin"
 
 	"net/http"
-	"net/url"
+	//	"net/url"
 	"notification"
 	"time"
 
 	"github.com/didip/tollbooth"
+	"github.com/didip/tollbooth/thirdparty/tollbooth_gin"
 )
 
 var (
@@ -42,621 +45,304 @@ func parseContent(source io.Reader, dest interface{}) error {
 }
 
 func main() {
-	limiterGeneric := tollbooth.NewLimiter(40, time.Minute)
+	r := gin.New()
+
+	limiterGeneric := tollbooth.NewLimiter(1000, time.Minute)
 	limiterGeneric.Methods = []string{"GET", "POST"}
 	limiterGeneric.Message = "{ 'status':'failed', 'errorCode':400, 'errorMessage':'Aguarde alguns segundos e repita a operação' }"
 
-	limiterAuth := tollbooth.NewLimiter(10, time.Minute)
+	limiterAuth := tollbooth.NewLimiter(50, time.Minute)
 	limiterAuth.Methods = []string{"GET", "POST"}
 	limiterAuth.Message = "{ 'status':'failed', 'errorCode':400, 'errorMessage':'Aguarde alguns segundos e repita a operação' }"
 
-	limiterNotification := tollbooth.NewLimiter(2, time.Minute)
+	limiterNotification := tollbooth.NewLimiter(20, time.Minute)
 	limiterNotification.Methods = []string{"GET", "POST"}
 	limiterNotification.Message = "{ 'status':'failed', 'errorCode':400, 'errorMessage':'Aguarde alguns segundos e repita a operação' }"
 
 	notification.Connect()
 
-	http.Handle("/ws/resendActivationCode", tollbooth.LimitFuncHandler(limiterNotification, func(w http.ResponseWriter, r *http.Request) {
-		path := html.EscapeString(r.URL.Path)
-
-		fmt.Println("PATH: " + path)
-
-		switch path {
-		case "/ws/resendActivationCode":
-			s_activate_request := s_activate_request_hdr{}
-
-			err := parseContent(r.Body, &s_activate_request)
-			if err != nil {
-				fmt.Println(err.Error())
-				w.Write([]byte(err.Error()))
-			}
-
+	r.POST("/ws/resendActivationCode", tollbooth_gin.LimitHandler(limiterNotification), func(c *gin.Context) {
+		s_activate_request := s_activate_request_hdr{}
+		if c.BindJSON(&s_activate_request) == nil {
 			result, err := resendActivationCode(s_activate_request)
 			if err != nil {
 				fmt.Println(err)
 				return
 			}
-			resultString, _ := json.Marshal(result)
-			w.Write(resultString)
 
-			break
+			c.JSON(http.StatusOK, result)
 		}
-	}))
-	http.Handle("/ws/createAccount", tollbooth.LimitFuncHandler(limiterNotification, func(w http.ResponseWriter, r *http.Request) {
-		path := html.EscapeString(r.URL.Path)
-
-		fmt.Println("PATH: " + path)
-		fmt.Println("IP" + r.Header.Get("X-FORWARDED-FOR"))
-
-		switch path {
-		case "/ws/createAccount":
-			s_login_create_request := s_login_create_request_hdr{}
-
-			err := parseContent(r.Body, &s_login_create_request)
-			if err != nil {
-				fmt.Println(err.Error())
-				w.Write([]byte(err.Error()))
-			}
-
+	})
+	r.POST("/ws/createAccount", tollbooth_gin.LimitHandler(limiterNotification), func(c *gin.Context) {
+		s_login_create_request := s_login_create_request_hdr{}
+		if c.BindJSON(&s_login_create_request) == nil {
 			s_result, err := createLogin(s_login_create_request)
 			if err != nil {
 				fmt.Println(err)
 				return
 			}
-			resultString, err := json.Marshal(s_result)
-
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			w.Write(resultString)
-
-			break
+			c.JSON(http.StatusOK, s_result)
 		}
-	}))
-	http.Handle("/ws/createBill", tollbooth.LimitFuncHandler(limiterNotification, func(w http.ResponseWriter, r *http.Request) {
-		path := html.EscapeString(r.URL.Path)
-
-		fmt.Println("PATH: " + path)
-
-		switch path {
-		case "/ws/createBill":
-			s_createBill_request := s_createBill_request_hdr{}
-
-			err := parseContent(r.Body, &s_createBill_request)
-			if err != nil {
-				fmt.Println(err.Error())
-				w.Write([]byte(err.Error()))
-			}
-
+	})
+	r.POST("/ws/createBill", tollbooth_gin.LimitHandler(limiterNotification), func(c *gin.Context) {
+		s_createBill_request := s_createBill_request_hdr{}
+		if c.BindJSON(&s_createBill_request) == nil {
 			s_result, err := createBill(s_createBill_request)
 			if err != nil {
 				fmt.Println(err)
 				return
 			}
-			resultString, err := json.Marshal(s_result)
-
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			w.Write(resultString)
-
-			break
+			c.JSON(http.StatusOK, s_result)
 		}
-	}))
-
-	http.Handle("/ws/lostPassword", tollbooth.LimitFuncHandler(limiterNotification, func(w http.ResponseWriter, r *http.Request) {
-		path := html.EscapeString(r.URL.Path)
-
-		fmt.Println("PATH: " + path)
-
-		switch path {
-		case "/ws/lostPassword":
-			s_lost_password := s_lost_password_hdr{}
-
-			err := parseContent(r.Body, &s_lost_password)
-			if err != nil {
-				fmt.Println(err.Error())
-				w.Write([]byte(err.Error()))
-			}
-
+	})
+	r.POST("/ws/lostPassword", tollbooth_gin.LimitHandler(limiterNotification), func(c *gin.Context) {
+		s_lost_password := s_lost_password_hdr{}
+		if c.BindJSON(&s_lost_password) == nil {
 			lostPassword(s_lost_password)
 
-			resultString, _ := json.Marshal(s_status{"success", "", 0})
-
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			w.Write(resultString)
-
-			break
+			c.JSON(http.StatusOK, s_status{"success", "", 0})
 		}
-	}))
+	})
+	r.Static("/ws/image/logo", "/var/logos")
 
-	http.Handle("/ws/activateAccount", tollbooth.LimitFuncHandler(limiterNotification, func(w http.ResponseWriter, r *http.Request) {
-		path := html.EscapeString(r.URL.Path)
-
-		fmt.Println("PATH: " + path)
-
-		switch path {
-		case "/ws/activateAccount":
-			s_activate_request := s_activate_request_hdr{}
-
-			err := parseContent(r.Body, &s_activate_request)
-			if err != nil {
-				fmt.Println(err.Error())
-				w.Write([]byte(err.Error()))
-			}
-
+	r.POST("/ws/activateAccount", tollbooth_gin.LimitHandler(limiterNotification), func(c *gin.Context) {
+		s_activate_request := s_activate_request_hdr{}
+		if c.BindJSON(&s_activate_request) == nil {
 			result, err := activateAccount(s_activate_request)
 			if err != nil {
 				fmt.Println(err)
 				return
 			}
-			resultString, _ := json.Marshal(result)
-			w.Write(resultString)
-
-			break
+			c.JSON(http.StatusOK, result)
 		}
-	}))
-	http.Handle("/ws/login", tollbooth.LimitFuncHandler(limiterAuth, func(w http.ResponseWriter, r *http.Request) {
-		path := html.EscapeString(r.URL.Path)
-
-		fmt.Println("PATH: " + path)
-
-		switch path {
-		case "/ws/login":
-			s_login_request := s_login_request_hdr{}
-
-			err := parseContent(r.Body, &s_login_request)
-			if err != nil {
-				fmt.Println(err.Error())
-				w.Write([]byte(err.Error()))
-			}
-
+	})
+	r.POST("/ws/login", tollbooth_gin.LimitHandler(limiterAuth), func(c *gin.Context) {
+		s_login_request := s_login_request_hdr{}
+		if c.BindJSON(&s_login_request) == nil {
 			s_result, err := login(s_login_request)
 			if err != nil {
 				fmt.Println(err)
 				return
 			}
-			resultString, err := json.Marshal(s_result)
-
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			w.Write(resultString)
-
-			break
+			c.JSON(http.StatusOK, s_result)
 		}
-	}))
-	http.Handle("/", tollbooth.LimitFuncHandler(limiterGeneric, func(w http.ResponseWriter, r *http.Request) {
-
-		path := html.EscapeString(r.URL.Path)
-
-		fmt.Println("PATH: " + path)
-
-		switch path {
-		case "/ws/accountInfo":
-			s_cel_info := s_cel_info_hdr{}
-
-			err := parseContent(r.Body, &s_cel_info)
-			if err != nil {
-				fmt.Println(err.Error())
-				w.Write([]byte(err.Error()))
-			}
-
+	})
+	r.POST("/ws/accountInfo", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
+		s_cel_info := s_cel_info_hdr{}
+		if c.BindJSON(&s_cel_info) == nil {
 			s_result, err := getPublicLoginInfoByCel(s_cel_info)
 			if err != nil {
 				fmt.Println(err)
 				return
 			}
-			resultString, err := json.Marshal(s_result)
-
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			w.Write(resultString)
-
-			break
-		case "/ws/profile":
-			s_cel_info := s_cel_info_hdr{}
-
-			err := parseContent(r.Body, &s_cel_info)
-			if err != nil {
-				fmt.Println(err.Error())
-				w.Write([]byte(err.Error()))
-			}
-
+			c.JSON(http.StatusOK, s_result)
+		}
+	})
+	r.POST("/ws/profile", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
+		s_cel_info := s_cel_info_hdr{}
+		if c.BindJSON(&s_cel_info) == nil {
 			s_result, err := getMyInfo(s_cel_info)
 			if err != nil {
 				fmt.Println(err)
 				return
 			}
-			resultString, err := json.Marshal(s_result)
 
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			w.Write(resultString)
-
-			break
-		case "/ws/getHistory":
-			s_history_request := s_history_request_hdr{}
-
-			err := parseContent(r.Body, &s_history_request)
-			if err != nil {
-				fmt.Println(err.Error())
-				w.Write([]byte(err.Error()))
-			}
-
+			c.JSON(http.StatusOK, s_result)
+		}
+	})
+	r.POST("/ws/contactus", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
+	})
+	r.POST("/ws/getHistory", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
+		s_history_request := s_history_request_hdr{}
+		if c.BindJSON(&s_history_request) == nil {
 			s_result, err := getHistoryOfUser(s_history_request)
 			if err != nil {
 				fmt.Println(err)
 				return
 			}
-			resultString, err := json.Marshal(s_result)
+			c.JSON(http.StatusOK, s_result)
+		}
+	})
+	r.GET("/ws/activateGETAccount", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
+		dbConn := db.Connect()
+		defer dbConn.Close()
 
+		token := c.Query("TOKEN")
+
+		fmt.Println(token)
+		status := s_status{}
+		status.Status = "failed"
+		status.StatusCode = 500
+		status.ErrorMessage = "Parametros'"
+
+		if len(token) > 0 {
+			userInfo, err := db.GetLoginInfoBySalt(dbConn, token)
 			if err != nil {
-				fmt.Println(err)
-				return
+				status.StatusCode = 403
+				status.ErrorMessage = "Token não existe'"
+			} else if userInfo.Status == 0 {
+				db.ActivateUser(dbConn, token)
+				status.StatusCode = 0
+				status.Status = "success"
 			}
-			w.Write(resultString)
+		}
+		c.JSON(http.StatusOK, status)
 
-			break
-
-		case "/ws/activateGETAccount":
-			//	db.CreateAccount(dbConn, s_login_create_request.Email, s_login_create_request.Cel, dkb64Encoded, salt, s_login_create_request.Name)
-
-			url, _ := url.Parse(r.URL.String())
-			dbConn := db.Connect()
-
-			token := url.Query().Get("TOKEN")
-
-			fmt.Println(token)
-			status := s_status{}
-			status.Status = "failed"
-			status.StatusCode = 500
-			status.ErrorMessage = "Parametros'"
-
-			if len(token) > 0 {
-				userInfo, err := db.GetLoginInfoBySalt(dbConn, token)
-				if err != nil {
-					status.StatusCode = 403
-					status.ErrorMessage = "Token não existe'"
-				} else if userInfo.Status == 0 {
-					db.ActivateUser(dbConn, token)
-					status.StatusCode = 0
-					status.Status = "success"
-				}
-			}
-			resultString, err := json.Marshal(status)
-
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			w.Write(resultString)
-
-			dbConn.Close()
-			break
-		case "/ws/listServicos":
-			s_login_request := s_login_request_hdr{}
-
-			err := parseContent(r.Body, &s_login_request)
-			if err != nil {
-				fmt.Println(err.Error())
-				w.Write([]byte(err.Error()))
-			}
-
+	})
+	r.POST("/ws/listServicos", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
+		s_login_request := s_login_request_hdr{}
+		if c.BindJSON(&s_login_request) == nil {
 			s_result, err := login(s_login_request)
 			if err != nil {
 				fmt.Println(err)
 
-				resultString, _ := json.Marshal(s_status{"failed", "System error", 500})
-				w.Write(resultString)
+				c.JSON(http.StatusOK, s_status{"failed", "System error", 500})
 
 				return
 			}
-			resultString, err := json.Marshal(s_result)
+			c.JSON(http.StatusOK, s_result)
 
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			w.Write(resultString)
-
-			break
-
-		case "/ws/verifyLPToken":
-			s_lost_password := s_lost_password_hdr{}
-
-			err := parseContent(r.Body, &s_lost_password)
-			if err != nil {
-				fmt.Println(err.Error())
-				w.Write([]byte(err.Error()))
-			}
-
+		}
+	})
+	r.POST("/ws/verifyLPToken", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
+		s_lost_password := s_lost_password_hdr{}
+		if c.BindJSON(&s_lost_password) == nil {
 			result := verifyLPToken(s_lost_password)
 
-			resultString, _ := json.Marshal(result)
+			c.JSON(http.StatusOK, result)
 
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			w.Write(resultString)
-
-			break
-		case "/ws/changeLP":
-			s_lost_password := s_lost_password_hdr{}
-
-			err := parseContent(r.Body, &s_lost_password)
-			if err != nil {
-				fmt.Println(err.Error())
-				w.Write([]byte(err.Error()))
-			}
+		}
+	})
+	r.POST("/ws/changeLP", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
+		s_lost_password := s_lost_password_hdr{}
+		if c.BindJSON(&s_lost_password) == nil {
 
 			result := changeLPPassword(s_lost_password)
 
-			resultString, _ := json.Marshal(result)
+			c.JSON(http.StatusOK, result)
+		}
+	})
+	r.POST("/ws/getBalance", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
+		s_balance_request := s_balance_request_hdr{}
 
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			w.Write(resultString)
-
-			break
-		case "/ws/getBalance":
-			s_balance_request := s_balance_request_hdr{}
-
-			err := parseContent(r.Body, &s_balance_request)
-			if err != nil {
-				fmt.Println(err.Error())
-				w.Write([]byte(err.Error()))
-			}
-
+		if c.BindJSON(&s_balance_request) == nil {
 			s_result, err := getBalance(s_balance_request)
 			if err != nil {
 				fmt.Println(err)
 
-				resultString, _ := json.Marshal(s_status{"failed", "System error", 500})
-				w.Write(resultString)
+				c.JSON(http.StatusOK, s_status{"failed", "System error", 500})
 
 				return
 			}
-			resultString, err := json.Marshal(s_result)
-
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			w.Write(resultString)
-
-			break
-		case "/ws/getProvider":
-			s_provider_request := s_provider_request_hdr{}
-
-			err := parseContent(r.Body, &s_provider_request)
-			if err != nil {
-				fmt.Println(err.Error())
-				w.Write([]byte(err.Error()))
-			}
-
+			c.JSON(http.StatusOK, s_result)
+		}
+	})
+	r.POST("/ws/getProvider", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
+		s_provider_request := s_provider_request_hdr{}
+		if c.BindJSON(&s_provider_request) == nil {
 			s_result, err := getProvider(s_provider_request)
 			if err != nil {
 				fmt.Println(err)
 
-				resultString, _ := json.Marshal(s_status{"failed", "System error", 500})
-				w.Write(resultString)
-
+				c.JSON(http.StatusOK, s_status{"failed", "System error", 500})
 				return
 			}
-			resultString, err := json.Marshal(s_result)
 
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			w.Write(resultString)
-
-			break
-		case "/ws/getBoletoInfo":
-			s_boletoInfo_request := s_boletoInfo_request_hdr{}
-
-			err := parseContent(r.Body, &s_boletoInfo_request)
-			if err != nil {
-				fmt.Println(err.Error())
-				w.Write([]byte(err.Error()))
-			}
+			c.JSON(http.StatusOK, s_result)
+		}
+	})
+	r.POST("/ws/getBoletoInfo", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
+		s_boletoInfo_request := s_boletoInfo_request_hdr{}
+		if c.BindJSON(&s_boletoInfo_request) == nil {
 
 			s_result, err := getBoletoInfo(s_boletoInfo_request)
 			if err != nil {
-				fmt.Println(err)
-
-				resultString, _ := json.Marshal(s_status{"failed", "System error", 500})
-				w.Write(resultString)
+				c.JSON(http.StatusOK, s_status{"failed", "System error", 500})
 
 				return
 			}
-			resultString, err := json.Marshal(s_result)
-
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			w.Write(resultString)
-
-			break
-		case "/ws/transferCredits1":
-			s_transferCredits_request := s_transferCredits_request_hdr{}
-
-			err := parseContent(r.Body, &s_transferCredits_request)
-			if err != nil {
-				fmt.Println(err.Error())
-				w.Write([]byte(err.Error()))
-			}
-
+			c.JSON(http.StatusOK, s_result)
+		}
+	})
+	r.POST("/ws/transferCredits1", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
+		s_transferCredits_request := s_transferCredits_request_hdr{}
+		if c.BindJSON(&s_transferCredits_request) == nil {
 			s_result, err := transferCredits1(s_transferCredits_request)
 			if err != nil {
 				fmt.Println(err)
 
-				resultString, _ := json.Marshal(s_status{"failed", "System error", 500})
-				w.Write(resultString)
-
+				c.JSON(http.StatusOK, s_status{"failed", "System error", 500})
 				return
 			}
-			resultString, err := json.Marshal(s_result)
-
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			w.Write(resultString)
-
-			break
-		case "/ws/transferCredits2":
-			s_transferCredits_request := s_transferCredits_request_hdr{}
-
-			err := parseContent(r.Body, &s_transferCredits_request)
-			if err != nil {
-				fmt.Println(err.Error())
-				w.Write([]byte(err.Error()))
-			}
-
+			c.JSON(http.StatusOK, s_result)
+		}
+	})
+	r.POST("/ws/transferCredits2", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
+		s_transferCredits_request := s_transferCredits_request_hdr{}
+		if c.BindJSON(&s_transferCredits_request) == nil {
 			s_result, err := transferCredits2(s_transferCredits_request)
 			if err != nil {
 				fmt.Println(err)
 
-				resultString, _ := json.Marshal(s_status{"failed", "System error", 500})
-				w.Write(resultString)
+				c.JSON(http.StatusOK, s_status{"failed", "System error", 500})
 
 				return
 			}
-			resultString, err := json.Marshal(s_result)
-
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			w.Write(resultString)
-
-			break
-
-		case "/ws/pay1":
-			s_payment_request := s_payment_request_hdr{}
-
-			err := parseContent(r.Body, &s_payment_request)
-			if err != nil {
-				fmt.Println(err.Error())
-				w.Write([]byte(err.Error()))
-			}
-
+			c.JSON(http.StatusOK, s_result)
+		}
+	})
+	r.POST("/ws/pay1", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
+		s_payment_request := s_payment_request_hdr{}
+		if c.BindJSON(&s_payment_request) == nil {
 			s_result, err := payment1(s_payment_request)
 			if err != nil {
 				fmt.Println(err)
 
-				resultString, _ := json.Marshal(s_status{"failed", "System error", 500})
-				w.Write(resultString)
+				c.JSON(http.StatusOK, s_status{"failed", "System error", 500})
 
 				return
 			}
-			resultString, err := json.Marshal(s_result)
-
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			w.Write(resultString)
-
-			break
-
-		case "/ws/pay2":
-			s_payment_request := s_payment_request_hdr{}
-
-			err := parseContent(r.Body, &s_payment_request)
-			if err != nil {
-				fmt.Println(err.Error())
-				w.Write([]byte(err.Error()))
-			}
-
+			c.JSON(http.StatusOK, s_result)
+		}
+	})
+	r.POST("/ws/pay2", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
+		s_payment_request := s_payment_request_hdr{}
+		if c.BindJSON(&s_payment_request) == nil {
 			s_result, err := payment2(s_payment_request)
 			if err != nil {
 				fmt.Println(err)
 
-				resultString, _ := json.Marshal(s_status{"failed", "System error", 500})
-				w.Write(resultString)
+				c.JSON(http.StatusOK, s_status{"failed", "System error", 500})
 
 				return
 			}
-			resultString, err := json.Marshal(s_result)
-
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			w.Write(resultString)
-
-			break
-
-		case "/ws/updateAccount":
-			s_login_update_request := s_login_update_request_hdr{}
-
-			err := parseContent(r.Body, &s_login_update_request)
-			if err != nil {
-				fmt.Println(err.Error())
-				w.Write([]byte(err.Error()))
-			}
-
+			c.JSON(http.StatusOK, s_result)
+		}
+	})
+	r.POST("/ws/updateAccount", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
+		s_login_update_request := s_login_update_request_hdr{}
+		if c.BindJSON(&s_login_update_request) == nil {
 			s_result, err := updateUser(s_login_update_request)
 			if err != nil {
 				fmt.Println(err)
+				c.JSON(http.StatusOK, s_status{"failed", "System error", 500})
 				return
 			}
-			resultString, err := json.Marshal(s_result)
-
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			w.Write(resultString)
-
-			break
-		case "/ws/getBoletoImage":
-			s_getBill_request := s_getBill_request_hdr{}
-
-			err := parseContent(r.Body, &s_getBill_request)
-			if err != nil {
-				fmt.Println(err.Error())
-				w.Write([]byte(err.Error()))
-			}
+			c.JSON(http.StatusOK, s_result)
+		}
+	})
+	r.POST("/ws/getBoletoImage", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
+		s_getBill_request := s_getBill_request_hdr{}
+		if c.BindJSON(&s_getBill_request) == nil {
 
 			s_result, err := getBillImage(s_getBill_request)
 			if err != nil {
 				fmt.Println(err)
+				c.JSON(http.StatusOK, s_status{"failed", "System error", 500})
 				return
 			}
-			resultString, err := json.Marshal(s_result)
-
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			w.Write(resultString)
-
-			break
-
-		default:
-			w.WriteHeader(500)
-			w.Write([]byte("Not Found"))
-			break
+			c.JSON(http.StatusOK, s_result)
 		}
-	}))
-
-	log.Fatal(http.ListenAndServe(":8081", nil))
+	})
+	r.Run(":8081")
 }
