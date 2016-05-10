@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
 
 	_ "github.com/lib/pq"
 )
@@ -129,8 +130,8 @@ func InsertPaymentHistoryJSON(db *sql.DB, id int, jsonRequest string, jsonRepons
 	return nil
 }
 
-func CreateAccount(db *sql.DB, email string, cel string, password string, salt string, name string, photo string, terminal_login string, terminal_password string, terminal_id string) (int, error) {
-	stmt, err := db.Prepare(`insert into user_credentials (  email, cel, password, password_salt, name,status,photo, terminal_login, terminal_password, terminal_id ) values ( $1,$2, $3,$4,$5,1,$6, $7,$8, $9 )  RETURNING id`)
+func CreateAccount(db *sql.DB, document string, email string, cel string, password string, salt string, name string, photo string, terminal_login string, terminal_password string, terminal_id string) (int, error) {
+	stmt, err := db.Prepare(`insert into user_credentials ( document, email, cel, password, password_salt, name,status,photo, terminal_login, terminal_password, terminal_id ) values ( $1,$2, $3,$4,$5,$6,1, $7,$8, $9, $10 )  RETURNING id`)
 	defer stmt.Close()
 
 	if err != nil {
@@ -138,7 +139,7 @@ func CreateAccount(db *sql.DB, email string, cel string, password string, salt s
 		return 0, err
 	}
 	id := 0
-	err = stmt.QueryRow(email, cel, password, salt, name, photo, terminal_login, terminal_password, terminal_id).Scan(&id)
+	err = stmt.QueryRow(document, email, GetTelRAW(cel), password, salt, name, photo, terminal_login, terminal_password, terminal_id).Scan(&id)
 	if err != nil {
 		fmt.Println(err.Error())
 		return 0, err
@@ -167,6 +168,14 @@ func VerifyAuth(db *sql.DB, authToken string) int {
 		return 1
 	}
 	return 0
+
+}
+func GetTelRAW(tel string) string {
+	tel = strings.Replace(tel, "(", "", -1)
+	tel = strings.Replace(tel, ")", "", -1)
+	tel = strings.Replace(tel, " ", "", -1)
+	tel = strings.Replace(tel, "-", "", -1)
+	return tel
 
 }
 func ResetFailedLoginOfEmail(db *sql.DB, email string) error {
@@ -217,29 +226,29 @@ func ChangePassword(db *sql.DB, email string, password string, salt string) erro
 
 }
 
-func UpdateUser(db *sql.DB, id int, photo string, password string) error {
+func UpdateUser(db *sql.DB, id int, name string, photo string, password string) error {
 	if password != "" {
 		fmt.Println("UPDATE WITH PASSWORD: " + strconv.Itoa(id))
-		stmt, err := db.Prepare(`update user_credentials set password=$1,  photo=$2, terminal_password=$3 where email=$4`)
+		stmt, err := db.Prepare(`update user_credentials set name=$1, password=$2,  photo=$3, terminal_password=$4 where email=$5`)
 		defer stmt.Close()
 		if err != nil {
 			fmt.Println(err.Error())
 			return err
 		}
-		_, err = stmt.Exec(password, photo, password, id)
+		_, err = stmt.Exec(name, password, photo, password, id)
 		if err != nil {
 			fmt.Println(err.Error())
 			return err
 		}
 	} else {
 		fmt.Println("UPDATE SIMPLE: " + strconv.Itoa(id))
-		stmt, err := db.Prepare(`update user_credentials set photo=$1 where id=$2`)
+		stmt, err := db.Prepare(`update user_credentials set name=$1, photo=$2 where id=$3`)
 		defer stmt.Close()
 		if err != nil {
 			fmt.Println(err.Error())
 			return err
 		}
-		_, err = stmt.Exec(photo, id)
+		_, err = stmt.Exec(name, photo, id)
 		if err != nil {
 			fmt.Println(err.Error())
 			return err
@@ -304,7 +313,7 @@ func GetLoginInfoById(db *sql.DB, id int) (*Login_credentials_hdr, error) {
 	return &s_login_credentials, nil
 }
 func GetLoginInfoByCel(db *sql.DB, cel string) (*Login_credentials_hdr, error) {
-	stmt, err := db.Prepare("select  id, password, password_salt, terminal_login, terminal_id , terminal_serial, terminal_password, login_failed_count, status, cel,name  from user_credentials where cel=$1")
+	stmt, err := db.Prepare("select  id, password, password_salt, terminal_login, terminal_id , terminal_serial, terminal_password, login_failed_count, status, cel,name,email  from user_credentials where cel=$1")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -312,7 +321,7 @@ func GetLoginInfoByCel(db *sql.DB, cel string) (*Login_credentials_hdr, error) {
 
 	s_login_credentials := Login_credentials_hdr{}
 
-	err = stmt.QueryRow(cel).Scan(&s_login_credentials.Id, &s_login_credentials.Password, &s_login_credentials.PasswordSalt, &s_login_credentials.TerminalLogin, &s_login_credentials.TerminalId, &s_login_credentials.TerminalSerial, &s_login_credentials.TerminalPassword, &s_login_credentials.FailedLoginCount, &s_login_credentials.Status, &s_login_credentials.Cel, &s_login_credentials.Name)
+	err = stmt.QueryRow(cel).Scan(&s_login_credentials.Id, &s_login_credentials.Password, &s_login_credentials.PasswordSalt, &s_login_credentials.TerminalLogin, &s_login_credentials.TerminalId, &s_login_credentials.TerminalSerial, &s_login_credentials.TerminalPassword, &s_login_credentials.FailedLoginCount, &s_login_credentials.Status, &s_login_credentials.Cel, &s_login_credentials.Name, &s_login_credentials.Email)
 
 	if err != nil {
 		fmt.Println(err.Error())
@@ -394,13 +403,13 @@ func GetAuthToken(db *sql.DB, authToken string) (*Login_credentials_hdr, error) 
 	s_login_credentials := Login_credentials_hdr{}
 	fmt.Println("AUTH" + authToken)
 
-	stmt, err := db.Prepare("select u.password_salt, u.password, u.id, u.terminal_login, u.terminal_id , u.terminal_serial,terminal_password ,cel from user_tokens t, user_credentials u where t.user_credential_id=u.id and t.token=$1 and u.status=1")
+	stmt, err := db.Prepare("select u.password_salt, u.password, u.id, u.terminal_login, u.terminal_id , u.terminal_serial,terminal_password ,cel, email from user_tokens t, user_credentials u where t.user_credential_id=u.id and t.token=$1 and u.status=1")
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer stmt.Close()
 
-	err = stmt.QueryRow(authToken).Scan(&s_login_credentials.PasswordSalt, &s_login_credentials.Password, &s_login_credentials.Id, &s_login_credentials.TerminalLogin, &s_login_credentials.TerminalId, &s_login_credentials.TerminalSerial, &s_login_credentials.TerminalPassword, &s_login_credentials.Cel)
+	err = stmt.QueryRow(authToken).Scan(&s_login_credentials.PasswordSalt, &s_login_credentials.Password, &s_login_credentials.Id, &s_login_credentials.TerminalLogin, &s_login_credentials.TerminalId, &s_login_credentials.TerminalSerial, &s_login_credentials.TerminalPassword, &s_login_credentials.Cel, &s_login_credentials.Email)
 
 	if err != nil {
 		fmt.Println(err)

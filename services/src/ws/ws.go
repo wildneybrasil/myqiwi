@@ -180,8 +180,16 @@ type s_XMLResetPassword struct {
 	TermLogin string `xml:"term-login,omitempty"`
 	Result    string `xml:"result,attr,omitempty"`
 }
+type s_XMLCreditTransfer struct {
+	FromAccount       string `xml:"from-account,omitempty"`
+	ToAccount         string `xml:"to-account,omitempty"`
+	Amount            string `xml:"amount,omitempty"`
+	Result            string `xml:"result,attr,omitempty"`
+	ResultDescription string `xml:"result-description,attr,omitempty"`
+}
 type s_XMLPersons_hdr struct {
 	CreateAccount  *s_XMLCreateAccount  `xml:"createAccount"`
+	CreditTransfer *s_XMLCreditTransfer `xml:"creditTransfer"`
 	ChangePassword *s_XMLChangePassword `xml:"changePassword"`
 	ResetPassword  *s_XMLResetPassword  `xml:"resetPassword"`
 }
@@ -231,6 +239,7 @@ type WSResponse_transferCredits_hdr struct {
 	Result            string            `xml:"result,attr"`
 	ResultDescription string            `xml:"result-description,attr"`
 	XMLProvider       s_XMLProvider_hdr `xml:"providers"`
+	XMLPerson         s_XMLPersons_hdr  `xml:"persons"`
 }
 type WSResponse_hystory_hdr struct {
 	Result            string            `xml:"result,attr"`
@@ -475,9 +484,11 @@ func CreateAccount(name string, email string, document string, phone string, pas
 	//	s_credentials.TerminalPassword = "4995EA0596369F512A0334986E824C8A"
 	//	s_credentials.TerminalId = "269"
 	//	s_credentials.TerminalSerial = "2134"
-	s_credentials.TerminalLogin = "qwt.su"
-	s_credentials.TerminalPassword = "6B63DA2FACAC6FED58481DCBE3699475"
-	s_credentials.TerminalId = "269"
+	//	s_credentials.TerminalLogin = "qwt.su"
+	//	s_credentials.TerminalPassword = "6B63DA2FACAC6FED58481DCBE3699475"
+	s_credentials.TerminalLogin = "myqiwiapi"
+	s_credentials.TerminalPassword = "52E5C048D58E8B65459CF18C844AF911"
+	s_credentials.TerminalId = "2572"
 	s_credentials.TerminalSerial = "2134"
 
 	result, _, err := send(&s_credentials, &requestType)
@@ -504,9 +515,9 @@ func ResetPassword(email string, termId string, termLogin string) (*WSResponse_c
 	requestType.XMLPersons.ResetPassword.Step = "1"
 
 	s_credentials2 := db.Login_credentials_hdr{}
-	s_credentials2.TerminalLogin = "ttt2"
-	s_credentials2.TerminalPassword = "4995EA0596369F512A0334986E824C8A"
-	s_credentials2.TerminalId = "269"
+	s_credentials2.TerminalLogin = "myqiwiapi"
+	s_credentials2.TerminalPassword = "52E5C048D58E8B65459CF18C844AF911"
+	s_credentials2.TerminalId = "2572"
 	s_credentials2.TerminalSerial = "2134"
 
 	result, _, err := send(&s_credentials2, &requestType)
@@ -541,7 +552,7 @@ func ChangePassword(s_credentials *db.Login_credentials_hdr, password string) (*
 
 	return &s_response, nil
 }
-func GetProvider(s_credentials *db.Login_credentials_hdr) (*WSResponse_getProvider_hdr, error) {
+func GetProvider(s_credentials *db.Login_credentials_hdr) (*WSResponse_getProvider_hdr, *string, error) {
 	fmt.Println("GET PROVIDER")
 
 	s_response_getProvider := WSResponse_getProvider_hdr{}
@@ -552,17 +563,14 @@ func GetProvider(s_credentials *db.Login_credentials_hdr) (*WSResponse_getProvid
 
 	result, _, err := send(s_credentials, &requestType)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-
-	//	fmt.Println(result)
 
 	if err := xml.NewDecoder(strings.NewReader(*result)).Decode(&s_response_getProvider); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	//	fmt.Printf("COUNT %d\n", s_response_getProvider.XMLProvider.XMLGetProvider.Row[0].FiscalName)
-	return &s_response_getProvider, nil
+	return &s_response_getProvider, result, nil
 
 }
 
@@ -626,38 +634,33 @@ func GetBillImage(s_credentials *db.Login_credentials_hdr, boletoId string) (*WS
 
 	return &s_response_createBill, nil
 }
-func TransferCredits1(s_credentials *db.Login_credentials_hdr, toAccount string, toTerminal string, serviceId string, amount string) (*WSResponse_transferCredits_hdr, error) {
+func TransferCredits1(s_credentials *db.Login_credentials_hdr, toAccount string, amount string) (*WSResponse_transferCredits_hdr, error) {
 	fmt.Println("GET CREATE BILL")
 
 	s_response_createBill := WSResponse_transferCredits_hdr{}
-
-	currentDate := arrow.Now().CFormat("%Y-%m-%dT%H:%M:%S")
 
 	lastId, _ := GetLastID(s_credentials)
 	currentId, _ := strconv.ParseInt(lastId.XMLTerminals.XMLGetLastIds.XMLLastPayment.Id, 10, 0)
 	currentId = currentId + 1
 
 	requestType := s_request_data{}
-	requestType.XMLProvider = &s_XMLProvider_hdr{}
-	requestType.XMLProvider.XMLCheckPaymentRequisites = &s_XMLCheckPaymentRequisites{}
-	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Id = strconv.Itoa(int(currentId))
-	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentFrom.Amount = amount
-	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentFrom.Currency = "986"
-	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentTo.Amount = amount
-	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentTo.Currency = "986"
-	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentTo.Account = toAccount
-	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentTo.Service = "15695"
-	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentReceipt.Date = currentDate
-	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentReceipt.Id = strconv.Itoa(int(currentId))
-	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_id = toTerminal
-	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_isWeb = "1"
 
-	result, _, err := send(s_credentials, &requestType)
+	requestType.XMLPersons = &s_XMLPersons_hdr{}
+	requestType.XMLPersons.CreditTransfer = &s_XMLCreditTransfer{}
+	requestType.XMLPersons.CreditTransfer.Amount = amount
+	requestType.XMLPersons.CreditTransfer.FromAccount = s_credentials.Email
+	requestType.XMLPersons.CreditTransfer.ToAccount = toAccount
+
+	rootCredentials := db.Login_credentials_hdr{}
+	rootCredentials.TerminalLogin = "myqiwiapi"
+	rootCredentials.TerminalPassword = "52E5C048D58E8B65459CF18C844AF911"
+	rootCredentials.TerminalId = "2572"
+	rootCredentials.TerminalSerial = "2134"
+
+	result, _, err := send(&rootCredentials, &requestType)
 	if err != nil {
 		return nil, err
 	}
-
-	//	fmt.Println(result)
 
 	if err := xml.NewDecoder(strings.NewReader(*result)).Decode(&s_response_createBill); err != nil {
 		return nil, err

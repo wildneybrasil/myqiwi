@@ -5,8 +5,13 @@ import (
 	"bufio"
 	"db"
 	"encoding/base64"
+	"encoding/xml"
 	"fmt"
 	"os"
+	"redis"
+	"strconv"
+	"strings"
+	"time"
 	"ws"
 )
 
@@ -86,13 +91,6 @@ func getHistoryOfUser(s_history_request s_history_request_hdr) (s_history_respon
 	return s_history_response, nil
 }
 func getProvider(s_provider_request s_provider_request_hdr) (s_provider_response s_provider_response_hdr, err error) {
-	//	defer func() {
-	//		if r := recover(); r != nil {
-	//			fmt.Println("PANIC - ", r)
-
-	//			err = fmt.Errorf("panic")
-	//		}
-	//	}()
 
 	s_provider_response = s_provider_response_hdr{}
 	fmt.Println("GET PROVIDER " + s_provider_request.AuthToken)
@@ -104,11 +102,29 @@ func getProvider(s_provider_request s_provider_request_hdr) (s_provider_response
 
 	s_login_credentials, err := db.GetAuthToken(dbConn, s_provider_request.AuthToken)
 	if err == nil && s_login_credentials.Id > 0 {
-		result, err := ws.GetProvider(s_login_credentials)
+
+		var resultString *string
+		result := &ws.WSResponse_getProvider_hdr{}
+
+		rediString, err := redis.Get("PROVIDER_" + strconv.Itoa(s_login_credentials.Id))
+		if err == nil {
+			if err := xml.NewDecoder(strings.NewReader(*rediString)).Decode(&result); err != nil {
+				return s_provider_response, err
+			}
+
+		} else {
+			result, resultString, err = ws.GetProvider(s_login_credentials)
+
+			if err == nil {
+				redis.Set("PROVIDER_"+strconv.Itoa(s_login_credentials.Id), *resultString, 5*time.Minute)
+			}
+		}
+
 		if err != nil {
 			s_provider_response.StatusCode = 500
 			s_provider_response.ErrorMessage = "Internal server error"
 		} else {
+
 			s_provider_response.Data = &s_provider_response_data_hdr{}
 
 			services := []s_provider_response_service_hdr{}

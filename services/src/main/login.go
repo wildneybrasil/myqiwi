@@ -41,9 +41,10 @@ type s_cel_info_hdr struct {
 	AuthToken string `json:"authToken"`
 	Cel       string `json:"cel"`
 }
-type s_contact_hdr struct {
+type s_contact_request_hdr struct {
 	AuthToken string `json:"authToken"`
 	Text      string `json:"text"`
+	Dpto      string `json:"dpto"`
 }
 type s_login_request_hdr struct {
 	Email    string `json:"email"`
@@ -217,7 +218,7 @@ func updateUser(s_login_update_request s_login_update_request_hdr) (s_login_crea
 
 	fmt.Println(dkb64Encoded)
 
-	db.UpdateUser(dbConn, s_login_credentials.Id, s_login_update_request.Photo, dkb64Encoded)
+	db.UpdateUser(dbConn, s_login_credentials.Id, s_login_update_request.Name, s_login_update_request.Photo, dkb64Encoded)
 	//	db.UpdateUser(dbConn, s_login_credentials.Id, s_login_update_request.Name, s_login_update_request.Photo, s_login_update_request.Email, dkb64Encoded, salt)
 
 	return s_login_create_response, nil
@@ -302,7 +303,7 @@ func activateAccount(s_request s_activate_request_hdr) (result s_status, err err
 		if r := recover(); r != nil {
 			result.Status = "failed"
 			result.StatusCode = 404
-			result.ErrorMessage = "AuthToken invalido"
+			result.ErrorMessage = "System error "
 			err = nil
 		}
 	}()
@@ -355,7 +356,7 @@ func activateAccount(s_request s_activate_request_hdr) (result s_status, err err
 
 		}
 
-		id, err := db.CreateAccount(dbConn, s_redis.Email, s_redis.Cel, GetMD5Hash(s_redis.Password), "", s_redis.Name, s_redis.Photo, s_redis.Email, GetMD5Hash(s_redis.Password), wsResult.XMLPerson.CreateAccount.PointId)
+		id, err := db.CreateAccount(dbConn, s_redis.Document, s_redis.Email, s_redis.Cel, GetMD5Hash(s_redis.Password), "", s_redis.Name, s_redis.Photo, s_redis.Email, GetMD5Hash(s_redis.Password), wsResult.XMLPerson.CreateAccount.PointId)
 		if err != nil {
 			panic(err)
 		}
@@ -438,6 +439,23 @@ func lostPassword(s_lost_password s_lost_password_hdr) {
 
 	//	notification.Send(notification.NotificationMessage{"email", s_lost_password.Email, "\n\nhttp://ec2-54-207-24-178.sa-east-1.compute.amazonaws.com/password/#/password/" + s_lost_password.Email + "/" + recoverToken})
 
+}
+
+func contactUs(s_contact s_contact_request_hdr) (result s_status) {
+	dbConn := db.Connect()
+	defer dbConn.Close()
+
+	s_login_credentials, err := db.GetAuthToken(dbConn, s_contact.AuthToken)
+	if err != nil || s_login_credentials.Id <= 0 {
+		result.StatusCode = 401
+		result.ErrorMessage = "Login Invalido"
+
+		return result
+	}
+
+	notification.Send(notification.NotificationMessage{"email", s_contact.Dpto + "@qiwi.com", "Email: " + s_login_credentials.Email + "\nTexto:" + s_contact.Text})
+
+	return s_status{"success", "", 0}
 }
 func changeLPPassword(s_lost_password s_lost_password_hdr) (result s_status) {
 	defer func() {
@@ -578,8 +596,8 @@ func getPublicLoginInfoByCel(s_cel_info s_cel_info_hdr) (s_login_info s_login_in
 		dbResult, err := db.GetPublicLoginInfoByCel(dbConn, s_cel_info.Cel)
 		if err != nil {
 			s_login_info.Status = "failed"
-			s_login_info.StatusCode = 500
-			s_login_info.ErrorMessage = "Internal server error"
+			s_login_info.StatusCode = 404
+			s_login_info.ErrorMessage = "Usuário não encontrado"
 		} else {
 			s_login_info.Status = "success"
 			s_login_info.StatusCode = 0

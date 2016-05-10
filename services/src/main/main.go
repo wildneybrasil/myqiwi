@@ -150,7 +150,13 @@ func main() {
 			c.JSON(http.StatusOK, s_result)
 		}
 	})
-	r.POST("/ws/contactus", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
+	r.POST("/ws/contact", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
+		s_contact_request := s_contact_request_hdr{}
+		if c.BindJSON(&s_contact_request) == nil {
+			s_result := contactUs(s_contact_request)
+
+			c.JSON(http.StatusOK, s_result)
+		}
 	})
 	r.POST("/ws/getHistory", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
 		s_history_request := s_history_request_hdr{}
@@ -277,20 +283,7 @@ func main() {
 			c.JSON(http.StatusOK, s_result)
 		}
 	})
-	r.POST("/ws/transferCredits2", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
-		s_transferCredits_request := s_transferCredits_request_hdr{}
-		if c.BindJSON(&s_transferCredits_request) == nil {
-			s_result, err := transferCredits2(s_transferCredits_request)
-			if err != nil {
-				fmt.Println(err)
 
-				c.JSON(http.StatusOK, s_status{"failed", "System error", 500})
-
-				return
-			}
-			c.JSON(http.StatusOK, s_result)
-		}
-	})
 	r.POST("/ws/pay1", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
 		s_payment_request := s_payment_request_hdr{}
 		if c.BindJSON(&s_payment_request) == nil {

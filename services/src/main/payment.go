@@ -220,14 +220,26 @@ func payment1(s_payment_request s_payment_request_hdr) (s_payment_response s_pay
 
 				item := s_values_item_hdr{}
 
-				amount := strings.Replace(V1[k], "|", "", -1)
-				amountFloat, _ := strconv.ParseFloat(amount, 64)
-				amountString := fmt.Sprintf("%.02f", amountFloat/100)
+				if len(V1[k]) > 0 {
+					amount := strings.Replace(V1[k], "|", "", -1)
 
-				item.Amount = amountString
-				item.Id = strings.Replace(V3[k], "|", "", -1)
+					amountString := ""
+					if strings.Contains(amount, "-") {
+						sV1 := strings.Split(amount, "-")
 
-				s_payment_response.Data.Nominals.Items = append(s_payment_response.Data.Nominals.Items, item)
+						amountFloat1, _ := strconv.ParseFloat(sV1[0], 64)
+						amountFloat2, _ := strconv.ParseFloat(sV1[1], 64)
+						amountString = fmt.Sprintf("%.02f-%.02f", amountFloat1/100, amountFloat2/100)
+					} else {
+						amountFloat, _ := strconv.ParseFloat(amount, 64)
+						amountString = fmt.Sprintf("%.02f", amountFloat/100)
+					}
+
+					item.Amount = amountString
+					item.Id = strings.Replace(V3[k], "|", "", -1)
+
+					s_payment_response.Data.Nominals.Items = append(s_payment_response.Data.Nominals.Items, item)
+				}
 			}
 			s_payment_response.Data.Id = transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Id
 			switch serviceInfo.PaymentType {

@@ -4,8 +4,6 @@ package main
 import (
 	"db"
 	"fmt"
-	"strconv"
-	"strings"
 	"ws"
 )
 
@@ -64,95 +62,38 @@ func transferCredits1(s_transferCredits_request s_transferCredits_request_hdr) (
 		s_transferCredits_response.ErrorMessage = "Telefone não cadastrado no QIWI"
 		return s_transferCredits_response, nil
 	}
+
 	s_login_credentials, err := db.GetAuthToken(dbConn, s_transferCredits_request.AuthToken)
-	if err == nil && s_login_credentials.Id > 0 {
-		transferResponse, err := ws.TransferCredits1(s_login_credentials, s_rcpt_info.Cel, s_rcpt_info.TerminalId, "15695", "1")
-		if err != nil {
-			s_transferCredits_response.StatusCode = 500
-			s_transferCredits_response.ErrorMessage = "Internal server error"
-		} else {
-			strNominalsValue1 := transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp1
-			strNominalsValue3 := transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp3
-			V1 := strings.Split(strNominalsValue1, ";")
-			V3 := strings.Split(strNominalsValue3, ";")
 
-			for k, _ := range V1 {
-
-				item := s_values_item_hdr{}
-
-				amount := strings.Replace(V1[k], "|", "", -1)
-				amountFloat, _ := strconv.ParseFloat(amount, 64)
-				amountString := fmt.Sprintf("%.02f", amountFloat/100)
-
-				item.Amount = amountString
-				item.Id = V3[k]
-
-				s_transferCredits_response.Data.Nominals.Items = append(s_transferCredits_response.Data.Nominals.Items, item)
-			}
-			s_transferCredits_response.Data.Session = transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp4
-			s_transferCredits_response.Data.Id = transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Id
-		}
-	} else {
+	if !CheckPassword(s_transferCredits_request.Password, s_login_credentials.Password, s_login_credentials.PasswordSalt) {
 		s_transferCredits_response.StatusCode = 403
-		s_transferCredits_response.ErrorMessage = "Login/Senha inválido"
+		s_transferCredits_response.ErrorMessage = "Login/Senha inválido."
+
+		return s_transferCredits_response, nil
 	}
-	return s_transferCredits_response, nil
-}
-func transferCredits2(s_transferCredits_request s_transferCredits_request_hdr) (s_transferCredits_response s_transferCredits2_response_hdr, err error) {
-	//	defer func() {
-	//		if r := recover(); r != nil {
-	//			fmt.Println("PANIC - ", r)
 
-	//			err = fmt.Errorf("panic")
-	//		}
-	//	}()
-
-	s_transferCredits_response = s_transferCredits2_response_hdr{}
-
-	dbConn := db.Connect()
-
-	defer dbConn.Close()
-
-	s_login_credentials, err := db.GetAuthToken(dbConn, s_transferCredits_request.AuthToken)
 	if err == nil && s_login_credentials.Id > 0 {
-		if !CheckPassword(s_transferCredits_request.Password, s_login_credentials.Password, s_login_credentials.PasswordSalt) {
-			s_transferCredits_response.StatusCode = 403
-			s_transferCredits_response.ErrorMessage = "Login/Senha inválido."
-
-			return s_transferCredits_response, nil
-		}
-		// fim senha
-
-		s_rcpt, err := db.GetLoginInfoByCel(dbConn, s_transferCredits_request.Rcpt)
+		transferResponse, err := ws.TransferCredits1(s_login_credentials, s_rcpt_info.Email, s_transferCredits_request.Amount)
 		if err != nil {
 			s_transferCredits_response.StatusCode = 500
 			s_transferCredits_response.ErrorMessage = "Internal server error"
-			return s_transferCredits_response, nil
-		} else {
-			transferResponse, requestXML, responseXML, err := ws.TransferCredits2(s_login_credentials, s_transferCredits_request.Id, s_transferCredits_request.Session, s_rcpt.Cel, s_rcpt.TerminalId, "15695", s_transferCredits_request.Amount)
-			if err != nil {
-				s_transferCredits_response.StatusCode = 500
-				s_transferCredits_response.ErrorMessage = "Internal server error"
-				return s_transferCredits_response, nil
-			}
-			if transferResponse.XMLProvider.XMLPurchaseOnline != nil {
-				if transferResponse.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLVoucher != nil {
-					fmt.Println(transferResponse.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLVoucher.Code)
-					s_transferCredits_response.Data.Voucher = transferResponse.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLVoucher.Code
-					s_transferCredits_response.Data.Amount = transferResponse.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLVoucher.Amount
+		}
+		if transferResponse.Result == "0" {
+			if transferResponse.XMLPerson.CreditTransfer != nil {
+				if transferResponse.XMLPerson.CreditTransfer.Result == "0" {
+					s_transferCredits_response.StatusCode = 0
+				} else {
+					s_transferCredits_response.StatusCode = 500
+					s_transferCredits_response.ErrorMessage = transferResponse.XMLPerson.CreditTransfer.ResultDescription
 				}
-				if transferResponse.XMLProvider.XMLPurchaseOnline.XMLPayment.Result != "0" {
-					s_transferCredits_response.ErrorMessage, s_transferCredits_response.StatusCode = ws.GetErrorMessage(transferResponse.XMLProvider.XMLPurchaseOnline.XMLPayment.Result)
-					return s_transferCredits_response, nil
-				}
-				db.InsertPaymentHistory(dbConn, s_login_credentials.Id, "transfer", "15695", s_transferCredits_request, s_transferCredits_response, requestXML, responseXML, 1)
-
 			} else {
 				s_transferCredits_response.StatusCode = 500
 				s_transferCredits_response.ErrorMessage = "Internal server error"
-				return s_transferCredits_response, nil
 
 			}
+		} else {
+			s_transferCredits_response.StatusCode = 500
+			s_transferCredits_response.ErrorMessage = "Internal server error"
 		}
 	} else {
 		s_transferCredits_response.StatusCode = 403
