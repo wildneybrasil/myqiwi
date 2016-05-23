@@ -453,7 +453,8 @@ func contactUs(s_contact s_contact_request_hdr) (result s_status) {
 		return result
 	}
 
-	notification.Send(notification.NotificationMessage{"email", s_contact.Dpto + "@qiwi.com", "Email: " + s_login_credentials.Email + "\nTexto:" + s_contact.Text})
+	notification.Send(notification.NotificationMessage{"email", s_contact.Dpto + "@qiwi.com",  "From: <nao-responda@qiwibr.com>\nSubject: Mensagem via app\n\nEmail: "  + s_login_credentials.Email + "\nTexto:" + s_contact.Text})
+//	notification.Send(notification.NotificationMessage{"email", "fyy@mac.com", "From: <nao-responda@qiwibr.com>\nSubject: Mensagem via app\n\nEmail: " + s_login_credentials.Email + "\nTexto:" + s_contact.Text})
 
 	return s_status{"success", "", 0}
 }

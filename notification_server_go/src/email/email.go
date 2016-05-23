@@ -16,17 +16,17 @@ func Send(rcpt string, text string) (err error) {
 
 	auth := PlainAuth(
 		"",
-		"qiwi",
-		"vacaloca69",
-		"postfix",
+		"nao-responda@qiwibr.com",
+		"ypMgYnPi9FNpKZ9zwJ-dVg",
+		"smtp.mandrillapp.com",
 	)
 	err = SendMail(
-		"postfix:25",
+		"smtp.mandrillapp.com:25",
 		auth,
-		"qiwi@qiwi.com.br",
+		"nao-responda@qiwibr.com",
 		[]string{rcpt},
 		[]byte(text),
 	)
-
+        fmt.Println(err)
 	return err
 }
