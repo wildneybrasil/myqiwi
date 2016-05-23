@@ -340,8 +340,8 @@ func GetPublicLoginInfoByCel(db *sql.DB, cel string) (*Login_credentials_hdr, er
 
 	var photo []byte
 
-	s_login_credentials.Photo = string(photo)
 	err = stmt.QueryRow(cel).Scan(&s_login_credentials.Id, &s_login_credentials.Cel, &s_login_credentials.Name, &photo)
+	s_login_credentials.Photo = string(photo)
 
 	if err != nil {
 		fmt.Println(err.Error())

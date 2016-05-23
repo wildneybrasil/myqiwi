@@ -43,6 +43,7 @@ type s_XMLBoletoBill struct {
 }
 type s_XMLCreateBill_hdr struct {
 	Amount     string           `xml:"amount,omitempty"`
+	Result     string           `xml:"result,attr,omitempty"`
 	BoletoBill *s_XMLBoletoBill `xml:"bill,omitempty"`
 }
 type s_XMLGetBillImage_hdr struct {
@@ -397,7 +398,7 @@ func GetErrorMessage(code string) (string, int) {
 		errorCode = 405
 		break
 	case "300":
-		result = "Erro inexperado"
+		result = "Erro inesperado"
 		errorCode = 405
 		break
 	case "500":
@@ -693,6 +694,9 @@ func GetHistory(s_credentials *db.Login_credentials_hdr) (*WSResponse_hystory_hd
 	return &s_response_createBill, nil
 }
 func splitCelDDD(phone string) string {
+	if len(phone) == 0 {
+		return "(99)999999999"
+	}
 	ddd := phone[0:2]
 	cel := phone[2:]
 

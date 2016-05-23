@@ -296,7 +296,10 @@ func payment1(s_payment_request s_payment_request_hdr) (s_payment_response s_pay
 		// transporte
 
 		if s_payment_request.Type == "transporte" {
-			transferResponse, err := ws.DoPaymentTrans1(s_login_credentials, s_payment_request.CardNumber, s_payment_request.Service, forceAmount, evStep, isNom, reqType)
+			cardNumber := strings.Replace(s_payment_request.CardNumber, ".", "", -1)
+			cardNumber = strings.Replace(cardNumber, "-", "", -1)
+
+			transferResponse, err := ws.DoPaymentTrans1(s_login_credentials, cardNumber, s_payment_request.Service, forceAmount, evStep, isNom, reqType)
 
 			if err != nil {
 				s_payment_response.StatusCode = 500
@@ -312,7 +315,7 @@ func payment1(s_payment_request s_payment_request_hdr) (s_payment_response s_pay
 				s_payment_response.ErrorMessage, s_payment_response.StatusCode = ws.GetErrorMessage(transferResponse.XMLProvider.XMLCheckPaymentRequisites.Result)
 				return s_payment_response, nil
 			}
-			if transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp2 != "" {
+			if transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp2 != "true" {
 				s_payment_response.StatusCode = 400
 				s_payment_response.ErrorMessage = transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp2
 				return s_payment_response, nil

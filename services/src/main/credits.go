@@ -49,6 +49,9 @@ type s_geBill_image_response_hdr struct {
 func createBill(s_createBill_request s_createBill_request_hdr) (s_createBill_response s_createBill_response_hdr, err error) {
 	defer func() {
 		if r := recover(); r != nil {
+			s_createBill_response.StatusCode = 500
+			s_createBill_response.ErrorMessage = "Internal server error"
+
 			fmt.Println("PANIC - ", r)
 
 			err = fmt.Errorf("panic")
@@ -68,6 +71,14 @@ func createBill(s_createBill_request s_createBill_request_hdr) (s_createBill_res
 			s_createBill_response.StatusCode = 500
 			s_createBill_response.ErrorMessage = "Internal server error"
 		} else {
+			if WScreateBillResponse.Result != "0" {
+				s_createBill_response.ErrorMessage, s_createBill_response.StatusCode = ws.GetErrorMessage(WScreateBillResponse.Result)
+				return s_createBill_response, nil
+			}
+			if WScreateBillResponse.XMLAgents.CreateBill.Result != "0" {
+				s_createBill_response.ErrorMessage, s_createBill_response.StatusCode = ws.GetErrorMessage(WScreateBillResponse.XMLAgents.CreateBill.Result)
+				return s_createBill_response, nil
+			}
 			s_createBill_response.Data = &s_createBill_response_data_hdr{}
 			s_createBill_response.Data.Amount = WScreateBillResponse.XMLAgents.CreateBill.BoletoBill.Amount
 			s_createBill_response.Data.Id = WScreateBillResponse.XMLAgents.CreateBill.BoletoBill.Id
