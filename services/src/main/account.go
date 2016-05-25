@@ -156,7 +156,7 @@ func getProvider(s_provider_request s_provider_request_hdr) (s_provider_response
 							row := s_provider_response_row_hdr{}
 
 							row.FiscalName = item2.FiscalName
-							row.LongName = item2.LongName
+							row.LongName = item2.FiscalName
 							row.ReceiptName = item2.ReceiptName
 							row.ShortName = item2.ShortName
 							row.PrvId = item2.PrvId
