@@ -403,6 +403,7 @@ func payment2(s_payment_request s_payment_request_hdr) (s_payment_response s_pay
 			s_payment_request.Rcpt = s_login_credentials.Cel
 			break
 		case "Transporte":
+			session = s_payment_request.Session
 			break
 		// case "Software Express":
 		// case "Pin Offline":

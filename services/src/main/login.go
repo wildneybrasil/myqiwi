@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"notification"
+	"strings"
 	"random"
 	"redis"
 	"time"
@@ -146,6 +147,17 @@ func createLogin(s_login_create_request s_login_create_request_hdr) (s_login_cre
 	dbConn := db.Connect()
 	defer dbConn.Close()
 
+	cpf:= strings.Replace(s_login_create_request.Document, "-", "", -1);
+	cpf = strings.Replace(cpf, ".", "", -1);
+	_, err = db.GetLoginInfoByCPF( dbConn, cpf );
+	if( err ==nil ){
+		s_login_create_response.Status = "failed"
+		s_login_create_response.StatusCode = 400
+		s_login_create_response.ErrorMessage = "CPF ja cadastrado."
+
+		return s_login_create_response, nil
+	}
+
 	// verifca se login ja existe
 	vrfyLogin, err := db.GetLoginInfoByEmail(dbConn, s_login_create_request.Email)
 	if vrfyLogin != nil {
@@ -168,13 +180,14 @@ func createLogin(s_login_create_request s_login_create_request_hdr) (s_login_cre
 	s_redis := s_redis_create_account_hdr{}
 	s_redis.Name = s_login_create_request.Name
 	s_redis.Cel = s_login_create_request.Cel
-	s_redis.Email = s_login_create_request.Email
+	s_redis.Email = strings.ToLower(s_login_create_request.Email)
 	s_redis.Photo = s_login_create_request.Photo
-	s_redis.Document = s_login_create_request.Document
+	s_redis.Document = cpf
 	s_redis.Password = s_login_create_request.Password
 	s_redis.Salt = ""
 	s_redis.AuthToken = authToken
 	s_redis.ActivationCode = activationCode
+
 
 	redisString, _ := json.Marshal(s_redis)
 	redis.Set(s_redis.AuthToken, string(redisString), 1000*time.Minute)

@@ -274,6 +274,28 @@ func IncreaseFailedLoginOfEmail(db *sql.DB, email string) error {
 	return nil
 
 }
+func GetLoginInfoByCPF(db *sql.DB, cpf string) (*Login_credentials_hdr, error) {
+	stmt, err := db.Prepare("select  id, password, password_salt, terminal_login, terminal_id , terminal_serial, terminal_password, login_failed_count, status, cel  from user_credentials where document=$1")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer stmt.Close()
+
+	s_login_credentials := Login_credentials_hdr{}
+
+	rawCPF:=strings.Replace(cpf, "-", "", -1);
+	rawCPF=strings.Replace(cpf, ".", "", -1);
+
+	fmt.Println("CHECK CPF:" + rawCPF);
+
+	err = stmt.QueryRow(rawCPF).Scan(&s_login_credentials.Id, &s_login_credentials.Password, &s_login_credentials.PasswordSalt, &s_login_credentials.TerminalLogin, &s_login_credentials.TerminalId, &s_login_credentials.TerminalSerial, &s_login_credentials.TerminalPassword, &s_login_credentials.FailedLoginCount, &s_login_credentials.Status, &s_login_credentials.Cel)
+
+	if err != nil {
+		fmt.Println(err.Error())
+		return nil, err
+	}
+	return &s_login_credentials, nil
+}
 func GetLoginInfoByEmail(db *sql.DB, email string) (*Login_credentials_hdr, error) {
 	stmt, err := db.Prepare("select  id, password, password_salt, terminal_login, terminal_id , terminal_serial, terminal_password, login_failed_count, status, cel  from user_credentials where email=$1")
 	if err != nil {
