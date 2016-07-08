@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"redis"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -27,8 +28,25 @@ type s_provider_response_row_hdr struct {
 	PrvId       string `json:"prvId"`
 	ReceiptName string `json:"receiptName"`
 	ShortName   string `json:"shortName"`
+	Info        string `json:"info,omitempty"`
+	Pos         int    `json:"pos,omitempty"`
 	//	Logo        string `json:"logo"`
 }
+
+type Providers []s_provider_response_row_hdr
+
+func (slice Providers) Len() int {
+	return len(slice)
+}
+
+func (slice Providers) Less(i, j int) bool {
+	return slice[i].Pos < slice[j].Pos
+}
+
+func (slice Providers) Swap(i, j int) {
+	slice[i], slice[j] = slice[j], slice[i]
+}
+
 type s_provider_response_service_hdr struct {
 	ServiceName string                        `json:"serviceName"`
 	Type        string                        `json:"type"`
@@ -99,6 +117,13 @@ func getProvider(s_provider_request s_provider_request_hdr) (s_provider_response
 	defer dbConn.Close()
 
 	servicos, err := db.ListServicos(dbConn)
+	if err != nil {
+		fmt.Println(err)
+		s_provider_response.Status = "failed"
+		s_provider_response.StatusCode = 500
+		s_provider_response.ErrorMessage = "Internal server error"
+		return s_provider_response, nil
+	}
 
 	s_login_credentials, err := db.GetAuthToken(dbConn, s_provider_request.AuthToken)
 	if err == nil && s_login_credentials.Id > 0 {
@@ -121,6 +146,7 @@ func getProvider(s_provider_request s_provider_request_hdr) (s_provider_response
 		}
 
 		if err != nil {
+			s_provider_response.Status = "failed"
 			s_provider_response.StatusCode = 500
 			s_provider_response.ErrorMessage = "Internal server error"
 		} else {
@@ -137,14 +163,15 @@ func getProvider(s_provider_request s_provider_request_hdr) (s_provider_response
 						item.ServiceName = s.Name
 						item.Type = s.Type
 						item.LongName = s.LongName
-
+						item.Info = s.Info
+						item.Pos = s.Pos
 					}
 				}
 			}
 			for k, _ := range result.XMLProvider.XMLGetProvider.Row {
 				item := &result.XMLProvider.XMLGetProvider.Row[k]
 
-				providers := []s_provider_response_row_hdr{}
+				providers := Providers{}
 
 				if item.PrvId != "0" && item.ServiceName != "" {
 					for k2, _ := range result.XMLProvider.XMLGetProvider.Row {
@@ -160,6 +187,8 @@ func getProvider(s_provider_request s_provider_request_hdr) (s_provider_response
 							row.ReceiptName = item2.ReceiptName
 							row.ShortName = item2.ShortName
 							row.PrvId = item2.PrvId
+							row.Info = item2.Info
+							row.Pos = item2.Pos
 							//							row.Logo = readLogo(item2.PrvId)
 
 							item2.PrvId = "0"
@@ -168,6 +197,8 @@ func getProvider(s_provider_request s_provider_request_hdr) (s_provider_response
 					}
 				}
 				if len(providers) > 0 {
+					sort.Sort(providers)
+
 					s_service := s_provider_response_service_hdr{}
 					s_service.Provider = providers
 
@@ -177,10 +208,11 @@ func getProvider(s_provider_request s_provider_request_hdr) (s_provider_response
 
 				}
 			}
-
+			s_provider_response.Status = "success"
 			s_provider_response.Data.Services = services
 		}
 	} else {
+		s_provider_response.Status = "failed"
 		s_provider_response.StatusCode = 403
 		s_provider_response.ErrorMessage = "Login/Senha inválido"
 	}

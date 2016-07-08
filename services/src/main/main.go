@@ -84,6 +84,17 @@ func main() {
 			c.JSON(http.StatusOK, s_result)
 		}
 	})
+	r.POST("/ws/createPOSAccount", tollbooth_gin.LimitHandler(limiterNotification), func(c *gin.Context) {
+		s_login_create_request := s_login_pos_create_request_hdr{}
+		if c.BindJSON(&s_login_create_request) == nil {
+			s_result, err := createPOSLogin(s_login_create_request)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			c.JSON(http.StatusOK, s_result)
+		}
+	})
 	r.POST("/ws/createBill", tollbooth_gin.LimitHandler(limiterNotification), func(c *gin.Context) {
 		s_createBill_request := s_createBill_request_hdr{}
 		if c.BindJSON(&s_createBill_request) == nil {
@@ -95,6 +106,7 @@ func main() {
 			c.JSON(http.StatusOK, s_result)
 		}
 	})
+
 	r.POST("/ws/lostPassword", tollbooth_gin.LimitHandler(limiterNotification), func(c *gin.Context) {
 		s_lost_password := s_lost_password_hdr{}
 		if c.BindJSON(&s_lost_password) == nil {
@@ -324,11 +336,10 @@ func main() {
 			c.JSON(http.StatusOK, s_result)
 		}
 	})
-	r.POST("/ws/getBoletoImage", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
-		s_getBill_request := s_getBill_request_hdr{}
-		if c.BindJSON(&s_getBill_request) == nil {
-
-			s_result, err := getBillImage(s_getBill_request)
+	r.POST("/ws/paymentNFC/1", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
+		s_payment_request := s_payment_request_hdr{}
+		if c.BindJSON(&s_payment_request) == nil {
+			s_result, err := paymentNFC1(s_payment_request)
 			if err != nil {
 				fmt.Println(err)
 				c.JSON(http.StatusOK, s_status{"failed", "System error", 500})
@@ -337,5 +348,67 @@ func main() {
 			c.JSON(http.StatusOK, s_result)
 		}
 	})
+	r.POST("/ws/paymentNFC/2", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
+		s_payment_request := s_payment_request_hdr{}
+		if c.BindJSON(&s_payment_request) == nil {
+			s_result, err := paymentNFC2(s_payment_request)
+			if err != nil {
+				fmt.Println(err)
+				c.JSON(http.StatusOK, s_status{"failed", "System error", 500})
+				return
+			}
+			c.JSON(http.StatusOK, s_result)
+		}
+	})
+	r.POST("/ws/paymentNFC/3", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
+		s_payment_request := s_payment_request_hdr{}
+		if c.BindJSON(&s_payment_request) == nil {
+			s_result, err := paymentNFC3(s_payment_request)
+			if err != nil {
+				fmt.Println(err)
+				c.JSON(http.StatusOK, s_status{"failed", "System error", 500})
+				return
+			}
+			c.JSON(http.StatusOK, s_result)
+		}
+	})
+	r.POST("/ws/paymentNFC/5", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
+		s_payment_request := s_payment_request_hdr{}
+		if c.BindJSON(&s_payment_request) == nil {
+			s_result, err := paymentNFC4(s_payment_request)
+			if err != nil {
+				fmt.Println(err)
+				c.JSON(http.StatusOK, s_status{"failed", "System error", 500})
+				return
+			}
+			c.JSON(http.StatusOK, s_result)
+		}
+	})
+	r.POST("/ws/paymentNFC/5", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
+		s_payment_request := s_payment_request_hdr{}
+		if c.BindJSON(&s_payment_request) == nil {
+			s_result, err := paymentNFC5(s_payment_request)
+			if err != nil {
+				fmt.Println(err)
+				c.JSON(http.StatusOK, s_status{"failed", "System error", 500})
+				return
+			}
+			c.JSON(http.StatusOK, s_result)
+		}
+	})
+	r.POST("/ws/getBillInfo", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
+		s_getBill_request := s_getBill_request_hdr{}
+		if c.BindJSON(&s_getBill_request) == nil {
+
+			s_result, err := getBillInfo(s_getBill_request)
+			if err != nil {
+				fmt.Println(err)
+				c.JSON(http.StatusOK, s_status{"failed", "System error", 500})
+				return
+			}
+			c.JSON(http.StatusOK, s_result)
+		}
+	})
+
 	r.Run(":8081")
 }

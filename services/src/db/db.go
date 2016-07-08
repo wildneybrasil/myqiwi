@@ -36,6 +36,8 @@ type Services_hdr struct {
 	ServicoId   int
 	RvId        string
 	Type        string
+	Info        string
+	Pos         int
 }
 type History_hdr struct {
 	Id           int
@@ -130,8 +132,8 @@ func InsertPaymentHistoryJSON(db *sql.DB, id int, jsonRequest string, jsonRepons
 	return nil
 }
 
-func CreateAccount(db *sql.DB, document string, email string, cel string, password string, salt string, name string, photo string, terminal_login string, terminal_password string, terminal_id string) (int, error) {
-	stmt, err := db.Prepare(`insert into user_credentials ( document, email, cel, password, password_salt, name,status,photo, terminal_login, terminal_password, terminal_id ) values ( $1,$2, $3,$4,$5,$6,1, $7,$8, $9, $10 )  RETURNING id`)
+func CreateAccount(db *sql.DB, document string, email string, cel string, password string, salt string, name string, photo string, terminal_login string, terminal_password string, terminal_id string, terminal_type string) (int, error) {
+	stmt, err := db.Prepare(`insert into user_credentials ( document, email, cel, password, password_salt, name,status,photo, terminal_login, terminal_password, terminal_id, terminal_type ) values ( $1,$2, $3,$4,$5,$6,1, $7,$8, $9, $10, $11 )  RETURNING id`)
 	defer stmt.Close()
 
 	if err != nil {
@@ -139,7 +141,7 @@ func CreateAccount(db *sql.DB, document string, email string, cel string, passwo
 		return 0, err
 	}
 	id := 0
-	err = stmt.QueryRow(document, email, GetTelRAW(cel), password, salt, name, photo, terminal_login, terminal_password, terminal_id).Scan(&id)
+	err = stmt.QueryRow(document, email, GetTelRAW(cel), password, salt, name, photo, terminal_login, terminal_password, terminal_id, terminal_type).Scan(&id)
 	if err != nil {
 		fmt.Println(err.Error())
 		return 0, err
@@ -225,7 +227,22 @@ func ChangePassword(db *sql.DB, email string, password string, salt string) erro
 	return nil
 
 }
+func ChangeTerminalPassword(db *sql.DB, email string, password string) error {
+	stmt, err := db.Prepare(`update user_credentials set terminal_password = $2 where email=$1`)
+	defer stmt.Close()
 
+	if err != nil {
+		fmt.Println(err.Error())
+		return err
+	}
+	_, err = stmt.Exec(email, password)
+	if err != nil {
+		fmt.Println(err.Error())
+		return err
+	}
+	return nil
+
+}
 func UpdateUser(db *sql.DB, id int, name string, photo string, password string) error {
 	if password != "" {
 		fmt.Println("UPDATE WITH PASSWORD: " + strconv.Itoa(id))
@@ -283,10 +300,10 @@ func GetLoginInfoByCPF(db *sql.DB, cpf string) (*Login_credentials_hdr, error) {
 
 	s_login_credentials := Login_credentials_hdr{}
 
-	rawCPF:=strings.Replace(cpf, "-", "", -1);
-	rawCPF=strings.Replace(cpf, ".", "", -1);
+	rawCPF := strings.Replace(cpf, "-", "", -1)
+	rawCPF = strings.Replace(cpf, ".", "", -1)
 
-	fmt.Println("CHECK CPF:" + rawCPF);
+	fmt.Println("CHECK CPF:" + rawCPF)
 
 	err = stmt.QueryRow(rawCPF).Scan(&s_login_credentials.Id, &s_login_credentials.Password, &s_login_credentials.PasswordSalt, &s_login_credentials.TerminalLogin, &s_login_credentials.TerminalId, &s_login_credentials.TerminalSerial, &s_login_credentials.TerminalPassword, &s_login_credentials.FailedLoginCount, &s_login_credentials.Status, &s_login_credentials.Cel)
 
@@ -313,6 +330,7 @@ func GetLoginInfoByEmail(db *sql.DB, email string) (*Login_credentials_hdr, erro
 	}
 	return &s_login_credentials, nil
 }
+
 func GetLoginInfoById(db *sql.DB, id int) (*Login_credentials_hdr, error) {
 	stmt, err := db.Prepare("select  id, password, password_salt, terminal_login, terminal_id , terminal_serial, terminal_password, login_failed_count, status, cel, email,name,photo, document  from user_credentials where id=$1")
 	if err != nil {
@@ -453,7 +471,7 @@ func FindServiceByLongName(services *[]Services_hdr, longName string) *Services_
 func ListServicos(db *sql.DB) (*[]Services_hdr, error) {
 	result := make([]Services_hdr, 0)
 
-	stmt, err := db.Prepare("select i.longName, i.rv_id, s.name, s.type from servicos s, servicos_items i where i.servico_id=s.id order by i.longName")
+	stmt, err := db.Prepare("select i.longName, i.rv_id, s.name, s.type, i.Info, i.Pos from servicos s, servicos_items i where i.servico_id=s.id order by i.pos,i.longName")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -467,10 +485,13 @@ func ListServicos(db *sql.DB) (*[]Services_hdr, error) {
 	}
 	for rows.Next() {
 		item := Services_hdr{}
-		err = rows.Scan(&item.LongName, &item.RvId, &item.Name, &item.Type)
+
+		var info []byte
+		err = rows.Scan(&item.LongName, &item.RvId, &item.Name, &item.Type, &info, &item.Pos)
 		if err != nil {
 			return nil, err
 		}
+		item.Info = string(info)
 		fmt.Println("DB " + item.LongName)
 
 		result = append(result, item)

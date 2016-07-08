@@ -14,6 +14,8 @@ type s_createBill_request_hdr struct {
 type s_getBill_request_hdr struct {
 	AuthToken string `json:"authToken"`
 	BoletoId  string `json:"boletoId"`
+	Pdf       bool   `json:"pdf"`
+	Info      bool   `json:"info"`
 }
 
 type s_createBill_response_data_hdr struct {
@@ -38,8 +40,28 @@ type s_createBill_response_hdr struct {
 	s_status
 	Data *s_createBill_response_data_hdr `json:"data,omitempty"`
 }
+type s_geBill_image_data_response_items struct {
+	Id    string `json:"id,omitempty"`
+	Name  string `json:"name,omitempty"`
+	Value string `json:"value,omitempty"`
+}
 type s_geBill_image_data_response struct {
-	Image string `json:"image,omitempty"`
+	Image           string                               `json:"image,omitempty"`
+	IssuerAgentId   string                               `json:"issuerAgentId,omitempty"`
+	IssuerAgentName string                               `json:"issuerAgentName,omitempty"`
+	Amount          string                               `json:"amount,omitempty"`
+	Comission       string                               `json:"comission,omitempty"`
+	BankName        string                               `json:"bankName,omitempty"`
+	ExpireDate      string                               `json:"expireDate,omitempty"`
+	CreateTime      string                               `json:"createTime,omitempty"`
+	Instructions    string                               `json:"instructions,omitempty"`
+	ReceiverAddress string                               `json:"receiverAddress,omitempty"`
+	ReceiverInn     string                               `json:"ReceiverInn,omitempty"`
+	IssuerAgentInn  string                               `json:"IssuerAgentInn,omitempty"`
+	Ipte            string                               `json:"Ipte,omitempty"`
+	TypeLine        string                               `json:"typeLine,omitempty"`
+	OwnNumber       string                               `json:"ownNumber,omitempty"`
+	CustomFields    []s_geBill_image_data_response_items `json:"customFields,omitempty"`
 }
 type s_geBill_image_response_hdr struct {
 	s_status
@@ -89,14 +111,14 @@ func createBill(s_createBill_request s_createBill_request_hdr) (s_createBill_res
 	}
 	return s_createBill_response, nil
 }
-func getBillImage(s_getBill_request s_getBill_request_hdr) (s_geBill_image_response s_geBill_image_response_hdr, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Println("PANIC - ", r)
+func getBillInfo(s_getBill_request s_getBill_request_hdr) (s_geBill_image_response s_geBill_image_response_hdr, err error) {
+	//	defer func() {
+	//		if r := recover(); r != nil {
+	//			fmt.Println("PANIC - ", r)
 
-			err = fmt.Errorf("panic")
-		}
-	}()
+	//			err = fmt.Errorf("panic")
+	//		}
+	//	}()
 	s_geBill_image_response = s_geBill_image_response_hdr{}
 	fmt.Println("CREATE BILL " + s_getBill_request.AuthToken)
 
@@ -106,14 +128,51 @@ func getBillImage(s_getBill_request s_getBill_request_hdr) (s_geBill_image_respo
 
 	s_login_credentials, err := db.GetAuthToken(dbConn, s_getBill_request.AuthToken)
 	if err == nil && s_login_credentials.Id > 0 {
-		wsResponse, err := ws.GetBillImage(s_login_credentials, s_getBill_request.BoletoId)
-		if err != nil {
-			s_geBill_image_response.StatusCode = 500
-			s_geBill_image_response.ErrorMessage = "Internal server error"
-		} else {
-			s_geBill_image_response.Data = &s_geBill_image_data_response{}
-			s_geBill_image_response.Data.Image = wsResponse.XMLAgents.GetBillImage.Image
+		var boletoInfo *ws.WSResponse_createBill_hdr
+		var boletoImage *ws.WSResponse_createBill_hdr
+
+		if s_getBill_request.Pdf {
+			boletoImage, err = ws.GetBillImage(s_login_credentials, s_getBill_request.BoletoId)
+			if err != nil {
+				s_geBill_image_response.StatusCode = 500
+				s_geBill_image_response.ErrorMessage = "Internal server error"
+				return s_geBill_image_response, nil
+			}
 		}
+		if s_getBill_request.Info {
+			boletoInfo, err = ws.GetBillInfo(s_login_credentials, s_getBill_request.BoletoId)
+			if err != nil {
+				s_geBill_image_response.StatusCode = 500
+				s_geBill_image_response.ErrorMessage = "Internal server error"
+				return s_geBill_image_response, nil
+			}
+		}
+		s_geBill_image_response.Data.Image = boletoImage.XMLAgents.GetBillImage.Image
+
+		s_geBill_image_response.Data.BankName = boletoInfo.XMLAgents.GetBillImage.Bill.BankName
+		s_geBill_image_response.Data.Comission = boletoInfo.XMLAgents.GetBillImage.Bill.Comission
+		s_geBill_image_response.Data.CreateTime = boletoInfo.XMLAgents.GetBillImage.Bill.CreateTime
+		s_geBill_image_response.Data.ExpireDate = boletoInfo.XMLAgents.GetBillImage.Bill.ExpireDate
+		s_geBill_image_response.Data.Instructions = boletoInfo.XMLAgents.GetBillImage.Bill.Instructions
+		s_geBill_image_response.Data.Ipte = boletoInfo.XMLAgents.GetBillImage.Bill.Ipte
+		s_geBill_image_response.Data.IssuerAgentId = boletoInfo.XMLAgents.GetBillImage.Bill.IssuerAgentId
+		s_geBill_image_response.Data.IssuerAgentInn = boletoInfo.XMLAgents.GetBillImage.Bill.IssuerAgentInn
+		s_geBill_image_response.Data.IssuerAgentName = boletoInfo.XMLAgents.GetBillImage.Bill.IssuerAgentName
+		s_geBill_image_response.Data.OwnNumber = boletoInfo.XMLAgents.GetBillImage.Bill.OwnNumber
+		s_geBill_image_response.Data.ReceiverAddress = boletoInfo.XMLAgents.GetBillImage.Bill.ReceiverAddress
+		s_geBill_image_response.Data.ReceiverInn = boletoInfo.XMLAgents.GetBillImage.Bill.ReceiverInn
+		s_geBill_image_response.Data.TypeLine = boletoInfo.XMLAgents.GetBillImage.Bill.TypeLine
+
+		customValues := make([]s_geBill_image_data_response_items, 0)
+		for _, v := range boletoInfo.XMLAgents.GetBillImage.Bill.CustomFields.Field {
+			value := s_geBill_image_data_response_items{}
+			value.Id = v.Id
+			value.Name = v.Name
+			value.Value = v.Value
+
+			customValues = append(customValues, value)
+		}
+		return s_geBill_image_response, nil
 	} else {
 		s_geBill_image_response.StatusCode = 403
 		s_geBill_image_response.ErrorMessage = "Login/Senha inválido"

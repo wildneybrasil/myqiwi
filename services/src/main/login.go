@@ -9,9 +9,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"notification"
-	"strings"
 	"random"
 	"redis"
+	"strings"
 	"time"
 	"ws"
 
@@ -84,6 +84,15 @@ type s_login_create_request_hdr struct {
 	Cel      string `json:"cel"`
 	Photo    string `json:"photo"`
 }
+type s_login_pos_create_request_hdr struct {
+	AuthToken  string `json:"authToken"`
+	Email      string `json:"email"`
+	Password   string `json:"password"`
+	Name       string `json:"name"`
+	Document   string `json:"document"`
+	Cel        string `json:"cel"`
+	TerminalId string `json:"terminalId"`
+}
 type s_login_response_data_hdr struct {
 	AuthToken string `json:"authToken,omitempty"`
 }
@@ -147,10 +156,10 @@ func createLogin(s_login_create_request s_login_create_request_hdr) (s_login_cre
 	dbConn := db.Connect()
 	defer dbConn.Close()
 
-	cpf:= strings.Replace(s_login_create_request.Document, "-", "", -1);
-	cpf = strings.Replace(cpf, ".", "", -1);
-	_, err = db.GetLoginInfoByCPF( dbConn, cpf );
-	if( err ==nil ){
+	cpf := strings.Replace(s_login_create_request.Document, "-", "", -1)
+	cpf = strings.Replace(cpf, ".", "", -1)
+	_, err = db.GetLoginInfoByCPF(dbConn, cpf)
+	if err == nil {
 		s_login_create_response.Status = "failed"
 		s_login_create_response.StatusCode = 400
 		s_login_create_response.ErrorMessage = "CPF ja cadastrado."
@@ -164,6 +173,15 @@ func createLogin(s_login_create_request s_login_create_request_hdr) (s_login_cre
 		s_login_create_response.Status = "failed"
 		s_login_create_response.StatusCode = 400
 		s_login_create_response.ErrorMessage = "Email ja cadastrado."
+
+		return s_login_create_response, nil
+	}
+
+	vrfyLogin, err = db.GetLoginInfoByCel(dbConn, s_login_create_request.Cel)
+	if vrfyLogin != nil {
+		s_login_create_response.Status = "failed"
+		s_login_create_response.StatusCode = 400
+		s_login_create_response.ErrorMessage = "Telefone ja cadastrado."
 
 		return s_login_create_response, nil
 	}
@@ -188,7 +206,6 @@ func createLogin(s_login_create_request s_login_create_request_hdr) (s_login_cre
 	s_redis.AuthToken = authToken
 	s_redis.ActivationCode = activationCode
 
-
 	redisString, _ := json.Marshal(s_redis)
 	redis.Set(s_redis.AuthToken, string(redisString), 1000*time.Minute)
 
@@ -199,7 +216,92 @@ func createLogin(s_login_create_request s_login_create_request_hdr) (s_login_cre
 
 	return s_login_create_response, nil
 }
+func createPOSLogin(s_login_create_request s_login_pos_create_request_hdr) (s_login_create_response s_login_create_response_hdr, err error) {
+	authToken := random.RandomString(64)
 
+	s_login_create_response = s_login_create_response_hdr{}
+
+	if len(s_login_create_request.Cel) == 0 {
+		s_login_create_response.Status = "failed"
+		s_login_create_response.StatusCode = 400
+		s_login_create_response.ErrorMessage = "Faltando numero de celular"
+
+		return s_login_create_response, nil
+	}
+	if len(s_login_create_request.Document) == 0 {
+		s_login_create_response.Status = "failed"
+		s_login_create_response.StatusCode = 400
+		s_login_create_response.ErrorMessage = "Faltando numero do documento"
+
+		return s_login_create_response, nil
+	}
+	if len(s_login_create_request.Email) == 0 {
+		s_login_create_response.Status = "failed"
+		s_login_create_response.StatusCode = 400
+		s_login_create_response.ErrorMessage = "Faltando o email"
+
+		return s_login_create_response, nil
+	}
+	if len(s_login_create_request.Password) == 0 {
+		s_login_create_response.Status = "failed"
+		s_login_create_response.StatusCode = 400
+		s_login_create_response.ErrorMessage = "Faltando a senha"
+
+		return s_login_create_response, nil
+	}
+	if s_login_create_request.AuthToken != "FOIWHQFOIEHQOIFHMQOHFOPIDDSD" {
+		s_login_create_response.Status = "failed"
+		s_login_create_response.StatusCode = 401
+		s_login_create_response.ErrorMessage = "Authentication Failed"
+
+		return s_login_create_response, nil
+
+	}
+	if len(s_login_create_request.Name) == 0 {
+		s_login_create_response.Status = "failed"
+		s_login_create_response.StatusCode = 400
+		s_login_create_response.ErrorMessage = "Faltando o nome"
+
+		return s_login_create_response, nil
+	}
+
+	dbConn := db.Connect()
+	defer dbConn.Close()
+	cpf := strings.Replace(s_login_create_request.Document, "-", "", -1)
+	cpf = strings.Replace(cpf, ".", "", -1)
+
+	// verifca se login ja existe
+	vrfyLogin, err := db.GetLoginInfoByEmail(dbConn, s_login_create_request.Email)
+	if vrfyLogin != nil {
+		s_login_create_response.Status = "failed"
+		s_login_create_response.StatusCode = 400
+		s_login_create_response.ErrorMessage = "Email ja cadastrado."
+
+		return s_login_create_response, nil
+	}
+
+	s_redis := s_redis_create_account_hdr{}
+	s_redis.Name = s_login_create_request.Name
+	s_redis.Cel = s_login_create_request.Cel
+	s_redis.Email = strings.ToLower(s_login_create_request.Email)
+	s_redis.Document = cpf
+	s_redis.Password = s_login_create_request.Password
+	s_redis.Salt = ""
+	s_redis.AuthToken = authToken
+
+	_, err = db.CreateAccount(dbConn, s_redis.Document, s_redis.Email, s_redis.Cel, GetMD5Hash(s_redis.Password), "", s_redis.Name, s_redis.Photo, s_redis.Email, GetMD5Hash(s_redis.Password), s_login_create_request.TerminalId, "POS")
+	if err != nil {
+		panic(err)
+	}
+
+	redisString, _ := json.Marshal(s_redis)
+	redis.Set(s_redis.AuthToken, string(redisString), 1000*time.Minute)
+
+	s_login_create_response.Data = &s_login_response_data_hdr{}
+	s_login_create_response.Data.AuthToken = authToken
+
+	return s_login_create_response, nil
+}
 func updateUser(s_login_update_request s_login_update_request_hdr) (s_login_create_response s_login_create_response_hdr, err error) {
 	s_login_create_response = s_login_create_response_hdr{}
 
@@ -227,6 +329,8 @@ func updateUser(s_login_update_request s_login_update_request_hdr) (s_login_crea
 
 			return s_login_create_response, nil
 		}
+		db.ChangeTerminalPassword(dbConn, s_login_credentials.Email, dkb64Encoded)
+
 	}
 
 	fmt.Println(dkb64Encoded)
@@ -303,6 +407,7 @@ func login(s_login_request s_login_request_hdr) (s_login_response s_login_respon
 	} else {
 		db.ResetFailedLoginOfEmail(dbConn, s_login_request.Email)
 		db.InsertToken(dbConn, s_login_credentials.Id, authToken)
+		db.ChangeTerminalPassword(dbConn, s_login_request.Email, s_login_credentials.TerminalPassword)
 
 		s_login_response.Status = "success"
 		s_login_response.Data.AuthToken = authToken
@@ -369,7 +474,7 @@ func activateAccount(s_request s_activate_request_hdr) (result s_status, err err
 
 		}
 
-		id, err := db.CreateAccount(dbConn, s_redis.Document, s_redis.Email, s_redis.Cel, GetMD5Hash(s_redis.Password), "", s_redis.Name, s_redis.Photo, s_redis.Email, GetMD5Hash(s_redis.Password), wsResult.XMLPerson.CreateAccount.PointId)
+		id, err := db.CreateAccount(dbConn, s_redis.Document, s_redis.Email, s_redis.Cel, GetMD5Hash(s_redis.Password), "", s_redis.Name, s_redis.Photo, s_redis.Email, GetMD5Hash(s_redis.Password), wsResult.XMLPerson.CreateAccount.PointId, "NORMAL")
 		if err != nil {
 			panic(err)
 		}
@@ -466,8 +571,8 @@ func contactUs(s_contact s_contact_request_hdr) (result s_status) {
 		return result
 	}
 
-	notification.Send(notification.NotificationMessage{"email", s_contact.Dpto + "@qiwi.com",  "From: <nao-responda@qiwibr.com>\nSubject: Mensagem via app\n\nEmail: "  + s_login_credentials.Email + "\nTexto:" + s_contact.Text})
-//	notification.Send(notification.NotificationMessage{"email", "fyy@mac.com", "From: <nao-responda@qiwibr.com>\nSubject: Mensagem via app\n\nEmail: " + s_login_credentials.Email + "\nTexto:" + s_contact.Text})
+	notification.Send(notification.NotificationMessage{"email", s_contact.Dpto + "@qiwi.com", "From: <nao-responda@qiwibr.com>\nSubject: Mensagem via app\n\nEmail: " + s_login_credentials.Email + "\nTexto:" + s_contact.Text})
+	//	notification.Send(notification.NotificationMessage{"email", "fyy@mac.com", "From: <nao-responda@qiwibr.com>\nSubject: Mensagem via app\n\nEmail: " + s_login_credentials.Email + "\nTexto:" + s_contact.Text})
 
 	return s_status{"success", "", 0}
 }

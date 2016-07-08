@@ -43,12 +43,18 @@ type s_payment_request_hdr struct {
 	Type           string `json:"type"`
 	CardNumber     string `json:"cardNumber"`
 	Password       string `json:"password"`
+	EvCardType     string `json:"evCardType"`
+	EvCardUID      string `json:"evCardUID"`
+	EvCardData     string `json:"evCardData"`
+	EvNominal      string `json:"evNominal"`
+	Ev_wallet_code string `json:"ev_wallet_code"`
 }
 
 type s_payment_response_data_hdr struct {
 	PIN      string                 `json:"pin,omitempty"`
 	Serial   string                 `json:"serial,omitempty"`
 	Session  string                 `json:"session,omitempty"`
+	Info     string                 `json:"info,omitempty"`
 	Id       string                 `json:"id,omitempty"`
 	Nominals *s_values_response_hdr `json:"nominals,omitempty"`
 }
@@ -67,6 +73,7 @@ func getBoletoInfo(s_boletoInfo_request s_boletoInfo_request_hdr) (s_boletoRespo
 	}()
 	if s_boletoInfo_request.Service == "" || s_boletoInfo_request.Boleto == "" || s_boletoInfo_request.Scanned == "" {
 		s_boletoResponse.StatusCode = 500
+		s_boletoResponse.Status = "failed"
 		s_boletoResponse.ErrorMessage = "Missing type."
 
 		return s_boletoResponse, nil
@@ -81,12 +88,14 @@ func getBoletoInfo(s_boletoInfo_request s_boletoInfo_request_hdr) (s_boletoRespo
 		transferResponse, err := ws.GetBoletoInfo(s_login_credentials, s_boletoInfo_request.Boleto, s_boletoInfo_request.Amount, s_login_credentials.Cel, s_boletoInfo_request.Scanned, s_boletoInfo_request.Service)
 		if err != nil {
 			s_boletoResponse.StatusCode = 500
+			s_boletoResponse.Status = "failed"
 			s_boletoResponse.ErrorMessage = "Internal server error"
 			return s_boletoResponse, nil
 		}
 		if transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Result != "0" || transferResponse.XMLProvider.XMLCheckPaymentRequisites.Result != "0" {
 			s_boletoResponse.StatusCode = 400
 			s_boletoResponse.ErrorMessage = "Internal server error"
+			s_boletoResponse.Status = "failed"
 			return s_boletoResponse, nil
 		}
 		boletoInfo := transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp2
@@ -133,6 +142,7 @@ func getBoletoInfo(s_boletoInfo_request s_boletoInfo_request_hdr) (s_boletoRespo
 	} else {
 		s_boletoResponse.StatusCode = 403
 		s_boletoResponse.ErrorMessage = "Login/Senha inválido"
+		s_boletoResponse.Status = "failed"
 	}
 	return s_boletoResponse, nil
 }
@@ -150,6 +160,7 @@ func payment1(s_payment_request s_payment_request_hdr) (s_payment_response s_pay
 
 		if s_payment_request.Type == "" {
 			s_payment_response.StatusCode = 500
+			s_payment_response.Status = "failed"
 			s_payment_response.ErrorMessage = "Missing type."
 
 			return s_payment_response, nil
@@ -185,6 +196,7 @@ func payment1(s_payment_request s_payment_request_hdr) (s_payment_response s_pay
 			isNom = ""
 			reqType = ""
 			break
+
 		default:
 			break
 		}
@@ -195,6 +207,7 @@ func payment1(s_payment_request s_payment_request_hdr) (s_payment_response s_pay
 
 			if err != nil {
 				s_payment_response.StatusCode = 500
+				s_payment_response.Status = "failed"
 				s_payment_response.ErrorMessage = "Internal server error"
 				return s_payment_response, nil
 			}
@@ -302,6 +315,7 @@ func payment1(s_payment_request s_payment_request_hdr) (s_payment_response s_pay
 			transferResponse, err := ws.DoPaymentTrans1(s_login_credentials, cardNumber, s_payment_request.Service, forceAmount, evStep, isNom, reqType)
 
 			if err != nil {
+				s_payment_response.Status = "failed"
 				s_payment_response.StatusCode = 500
 				s_payment_response.ErrorMessage = "Internal server error"
 				return s_payment_response, nil
@@ -340,11 +354,19 @@ func payment1(s_payment_request s_payment_request_hdr) (s_payment_response s_pay
 
 			if err != nil {
 				s_payment_response.StatusCode = 500
+				s_payment_response.Status = "failed"
 				s_payment_response.ErrorMessage = "Internal server error"
 				return s_payment_response, nil
 			}
 			s_payment_response.Data = &s_payment_response_data_hdr{}
 			s_payment_response.Data.Nominals = &s_values_response_hdr{}
+
+			if transferResponse.XMLProvider.XMLGetNomenclature.Goods == nil {
+				s_payment_response.StatusCode = 500
+				s_payment_response.Status = "failed"
+				s_payment_response.ErrorMessage = "Internal server error"
+				return s_payment_response, nil
+			}
 			for _, v := range *transferResponse.XMLProvider.XMLGetNomenclature.Goods {
 				item := s_values_item_hdr{}
 				item.Amount = v.Amount
@@ -357,6 +379,7 @@ func payment1(s_payment_request s_payment_request_hdr) (s_payment_response s_pay
 	} else {
 		s_payment_response.StatusCode = 403
 		s_payment_response.ErrorMessage = "Login/Senha inválido"
+		s_payment_response.Status = "failed"
 	}
 	return s_payment_response, nil
 }
@@ -364,6 +387,7 @@ func payment2(s_payment_request s_payment_request_hdr) (s_payment_response s_pay
 	if s_payment_request.Type == "" || s_payment_request.Service == "" {
 		s_payment_response.StatusCode = 500
 		s_payment_response.ErrorMessage = "Missing type."
+		s_payment_response.Status = "failed"
 
 		return s_payment_response, nil
 	}
@@ -374,6 +398,7 @@ func payment2(s_payment_request s_payment_request_hdr) (s_payment_response s_pay
 	serviceInfo, err := db.GetServiceByPrid(dbConn, int(serviceId))
 	if err != nil {
 		s_payment_response.StatusCode = 500
+		s_payment_response.Status = "failed"
 		s_payment_response.ErrorMessage = "Invalid service"
 
 		return s_payment_response, nil
@@ -383,8 +408,9 @@ func payment2(s_payment_request s_payment_request_hdr) (s_payment_response s_pay
 
 	s_login_credentials, err := db.GetAuthToken(dbConn, s_payment_request.AuthToken)
 	if err == nil && s_login_credentials.Id > 0 {
-		if !CheckPassword(s_payment_request.Password, s_login_credentials.Password, s_login_credentials.PasswordSalt) {
+		if !CheckPassword(s_payment_request.Password, s_login_credentials.TerminalPassword, s_login_credentials.PasswordSalt) {
 			s_payment_response.StatusCode = 403
+			s_payment_response.Status = "failed"
 			s_payment_response.ErrorMessage = "Login/Senha inválido."
 
 			return s_payment_response, nil
@@ -415,6 +441,7 @@ func payment2(s_payment_request s_payment_request_hdr) (s_payment_response s_pay
 			transferResponse1, err := ws.DoPaymentTel2(s_login_credentials, s_payment_request.Id, s_payment_request.Rcpt, s_payment_request.Service, s_payment_request.Amount)
 			if err != nil {
 				s_payment_response.StatusCode = 500
+				s_payment_response.Status = "failed"
 				s_payment_response.ErrorMessage = "Internal server error"
 
 				return s_payment_response, nil
@@ -433,7 +460,7 @@ func payment2(s_payment_request s_payment_request_hdr) (s_payment_response s_pay
 			break
 		case "Transporte":
 			fmt.Println("TRANSRPOTE 2")
-			s_payment_request.Rcpt = "(99)99999-9999"
+			s_payment_request.Rcpt = "99999999999"
 			transferResponse2, requestXML, responseXML, err = ws.DoPaymentTel3(s_login_credentials, s_payment_request.Id, session, s_payment_request.Rcpt, s_payment_request.Service, s_payment_request.Amount)
 			break
 		// case "Corban":
@@ -450,6 +477,7 @@ func payment2(s_payment_request s_payment_request_hdr) (s_payment_response s_pay
 
 		if err != nil {
 			s_payment_response.StatusCode = 500
+			s_payment_response.Status = "failed"
 			s_payment_response.ErrorMessage = "Internal server error"
 			return s_payment_response, nil
 		} else {
@@ -497,7 +525,234 @@ func payment2(s_payment_request s_payment_request_hdr) (s_payment_response s_pay
 		}
 	} else {
 		s_payment_response.StatusCode = 403
+		s_payment_response.Status = "failed"
 		s_payment_response.ErrorMessage = "Login/Senha inválido"
+	}
+	return s_payment_response, nil
+}
+
+func paymentNFC1(s_payment_request s_payment_request_hdr) (s_payment_response s_payment_response_hdr, err error) {
+
+	s_payment_response = s_payment_response_hdr{}
+
+	dbConn := db.Connect()
+
+	defer dbConn.Close()
+
+	s_login_credentials, err := db.GetAuthToken(dbConn, s_payment_request.AuthToken)
+	if err == nil && s_login_credentials.Id > 0 {
+
+		if s_payment_request.Type == "" {
+			s_payment_response.StatusCode = 500
+			s_payment_response.Status = "failed"
+			s_payment_response.ErrorMessage = "Missing type."
+
+			return s_payment_response, nil
+		}
+
+		transferResponse, err := ws.DoPaymentTransNFC1(s_login_credentials, s_payment_request.Service, s_payment_request.Amount, s_payment_request.EvCardType, s_payment_request.EvCardUID)
+
+		if err != nil {
+			s_payment_response.Status = "failed"
+			s_payment_response.StatusCode = 500
+			s_payment_response.ErrorMessage = "Internal server error"
+			return s_payment_response, nil
+		}
+		if transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Result != "0" {
+			s_payment_response.ErrorMessage, s_payment_response.StatusCode = ws.GetErrorMessage(transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Result)
+			return s_payment_response, nil
+		}
+		if transferResponse.XMLProvider.XMLCheckPaymentRequisites.Result != "0" {
+			s_payment_response.ErrorMessage, s_payment_response.StatusCode = ws.GetErrorMessage(transferResponse.XMLProvider.XMLCheckPaymentRequisites.Result)
+			return s_payment_response, nil
+		}
+
+		s_payment_response.Data = &s_payment_response_data_hdr{}
+
+		s_payment_response.Data.Session = transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp1
+		s_payment_response.Data.Id = transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Id
+		s_payment_response.Data.Info = transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp2
+		s_payment_response.Status = "success"
+
+	} else {
+		s_payment_response.StatusCode = 403
+		s_payment_response.ErrorMessage = "Login/Senha inválido"
+		s_payment_response.Status = "failed"
+	}
+	return s_payment_response, nil
+}
+
+//func DoPaymentTransNFC2(s_credentials *db.Login_credentials_hdr, id string, session string, amount string, serviceId string, ev_card_data string) (*WSResponse_transferCredits_hdr, error) {
+
+func paymentNFC2(s_payment_request s_payment_request_hdr) (s_payment_response s_payment_response_hdr, err error) {
+
+	s_payment_response = s_payment_response_hdr{}
+
+	dbConn := db.Connect()
+
+	defer dbConn.Close()
+
+	s_login_credentials, err := db.GetAuthToken(dbConn, s_payment_request.AuthToken)
+	if err == nil && s_login_credentials.Id > 0 {
+
+		transferResponse, err := ws.DoPaymentTransNFC2(s_login_credentials, s_payment_request.Id, s_payment_request.Session, s_payment_request.Amount, s_payment_request.Service, s_payment_request.EvCardData)
+		if err != nil {
+			s_payment_response.Status = "failed"
+			s_payment_response.StatusCode = 500
+			s_payment_response.ErrorMessage = "Internal server error"
+			return s_payment_response, nil
+		}
+		if transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Result != "0" {
+			s_payment_response.ErrorMessage, s_payment_response.StatusCode = ws.GetErrorMessage(transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Result)
+			return s_payment_response, nil
+		}
+		if transferResponse.XMLProvider.XMLCheckPaymentRequisites.Result != "0" {
+			s_payment_response.ErrorMessage, s_payment_response.StatusCode = ws.GetErrorMessage(transferResponse.XMLProvider.XMLCheckPaymentRequisites.Result)
+			return s_payment_response, nil
+		}
+
+		s_payment_response.Data = &s_payment_response_data_hdr{}
+		s_payment_response.Data.Info = transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp1
+		s_payment_response.Status = "success"
+
+	} else {
+		s_payment_response.StatusCode = 403
+		s_payment_response.ErrorMessage = "Login/Senha inválido"
+		s_payment_response.Status = "failed"
+	}
+	return s_payment_response, nil
+}
+func paymentNFC3(s_payment_request s_payment_request_hdr) (s_payment_response s_payment_response_hdr, err error) {
+
+	s_payment_response = s_payment_response_hdr{}
+
+	dbConn := db.Connect()
+
+	defer dbConn.Close()
+
+	s_login_credentials, err := db.GetAuthToken(dbConn, s_payment_request.AuthToken)
+	if err == nil && s_login_credentials.Id > 0 {
+
+		transferResponse, err := ws.DoPaymentTransNFC3(s_login_credentials, s_payment_request.Id, s_payment_request.Session, s_payment_request.Amount, s_payment_request.Service, s_payment_request.EvCardData)
+
+		if err != nil {
+			s_payment_response.Status = "failed"
+			s_payment_response.StatusCode = 500
+			s_payment_response.ErrorMessage = "Internal server error"
+			return s_payment_response, nil
+		}
+		if transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Result != "0" {
+			s_payment_response.ErrorMessage, s_payment_response.StatusCode = ws.GetErrorMessage(transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Result)
+			return s_payment_response, nil
+		}
+		if transferResponse.XMLProvider.XMLCheckPaymentRequisites.Result != "0" {
+			s_payment_response.ErrorMessage, s_payment_response.StatusCode = ws.GetErrorMessage(transferResponse.XMLProvider.XMLCheckPaymentRequisites.Result)
+			return s_payment_response, nil
+		}
+
+		s_payment_response.Data = &s_payment_response_data_hdr{}
+
+		s_payment_response.Data.Info = transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp1
+	} else {
+		s_payment_response.StatusCode = 403
+		s_payment_response.ErrorMessage = "Login/Senha inválido"
+		s_payment_response.Status = "failed"
+	}
+	return s_payment_response, nil
+}
+func paymentNFC4(s_payment_request s_payment_request_hdr) (s_payment_response s_payment_response_hdr, err error) {
+
+	s_payment_response = s_payment_response_hdr{}
+
+	dbConn := db.Connect()
+
+	defer dbConn.Close()
+
+	s_login_credentials, err := db.GetAuthToken(dbConn, s_payment_request.AuthToken)
+	if err == nil && s_login_credentials.Id > 0 {
+
+		if s_payment_request.Type == "" {
+			s_payment_response.StatusCode = 500
+			s_payment_response.Status = "failed"
+			s_payment_response.ErrorMessage = "Missing type."
+
+			return s_payment_response, nil
+		}
+		transferResponse, err := ws.DoPaymentTransNFC4(s_login_credentials, s_payment_request.Id, s_payment_request.Session, s_payment_request.Amount, s_payment_request.Service, s_payment_request.EvNominal)
+
+		if err != nil {
+			s_payment_response.Status = "failed"
+			s_payment_response.StatusCode = 500
+			s_payment_response.ErrorMessage = "Internal server error"
+			return s_payment_response, nil
+		}
+		if transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Result != "0" {
+			s_payment_response.ErrorMessage, s_payment_response.StatusCode = ws.GetErrorMessage(transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Result)
+			return s_payment_response, nil
+		}
+		if transferResponse.XMLProvider.XMLCheckPaymentRequisites.Result != "0" {
+			s_payment_response.ErrorMessage, s_payment_response.StatusCode = ws.GetErrorMessage(transferResponse.XMLProvider.XMLCheckPaymentRequisites.Result)
+			return s_payment_response, nil
+		}
+
+		s_payment_response.Data = &s_payment_response_data_hdr{}
+
+		s_payment_response.Data.Session = transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp1
+		s_payment_response.Data.Id = transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Id
+		s_payment_response.Data.Info = transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp2
+
+	} else {
+		s_payment_response.StatusCode = 403
+		s_payment_response.ErrorMessage = "Login/Senha inválido"
+		s_payment_response.Status = "failed"
+	}
+	return s_payment_response, nil
+}
+func paymentNFC5(s_payment_request s_payment_request_hdr) (s_payment_response s_payment_response_hdr, err error) {
+
+	s_payment_response = s_payment_response_hdr{}
+
+	dbConn := db.Connect()
+
+	defer dbConn.Close()
+
+	s_login_credentials, err := db.GetAuthToken(dbConn, s_payment_request.AuthToken)
+	if err == nil && s_login_credentials.Id > 0 {
+		if s_payment_request.Type == "" {
+			s_payment_response.StatusCode = 500
+			s_payment_response.Status = "failed"
+			s_payment_response.ErrorMessage = "Missing type."
+
+			return s_payment_response, nil
+		}
+		transferResponse, err := ws.DoPaymentTransNFC5(s_login_credentials, s_payment_request.Id, s_payment_request.Session, s_payment_request.Amount, s_payment_request.Service, s_payment_request.EvNominal, s_payment_request.Ev_wallet_code)
+		//func DoPaymentTransNFC5(s_credentials *db.Login_credentials_hdr, id string, session string, cardNumber string, serviceId string, Ev_force string, Ev_step string, Ev_isnom string, Ev_reqtype string, Ev_card_data string, Ev_nominal string, Ev_wallet_code string) (*WSResponse_transferCredits_hdr, error) {
+
+		if err != nil {
+			s_payment_response.Status = "failed"
+			s_payment_response.StatusCode = 500
+			s_payment_response.ErrorMessage = "Internal server error"
+			return s_payment_response, nil
+		}
+		if transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Result != "0" {
+			s_payment_response.ErrorMessage, s_payment_response.StatusCode = ws.GetErrorMessage(transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Result)
+			return s_payment_response, nil
+		}
+		if transferResponse.XMLProvider.XMLCheckPaymentRequisites.Result != "0" {
+			s_payment_response.ErrorMessage, s_payment_response.StatusCode = ws.GetErrorMessage(transferResponse.XMLProvider.XMLCheckPaymentRequisites.Result)
+			return s_payment_response, nil
+		}
+
+		s_payment_response.Data = &s_payment_response_data_hdr{}
+
+		s_payment_response.Data.Session = transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp1
+		s_payment_response.Data.Id = transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Id
+		s_payment_response.Data.Info = transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp2
+
+	} else {
+		s_payment_response.StatusCode = 403
+		s_payment_response.ErrorMessage = "Login/Senha inválido"
+		s_payment_response.Status = "failed"
 	}
 	return s_payment_response, nil
 }

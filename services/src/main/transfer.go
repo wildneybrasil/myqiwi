@@ -65,7 +65,7 @@ func transferCredits1(s_transferCredits_request s_transferCredits_request_hdr) (
 
 	s_login_credentials, err := db.GetAuthToken(dbConn, s_transferCredits_request.AuthToken)
 
-	if !CheckPassword(s_transferCredits_request.Password, s_login_credentials.Password, s_login_credentials.PasswordSalt) {
+	if !CheckPassword(s_transferCredits_request.Password, s_login_credentials.TerminalPassword, s_login_credentials.PasswordSalt) {
 		s_transferCredits_response.StatusCode = 403
 		s_transferCredits_response.ErrorMessage = "Login/Senha inválido."
 
