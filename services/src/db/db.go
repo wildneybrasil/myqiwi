@@ -18,6 +18,7 @@ type Login_credentials_hdr struct {
 	TerminalSerial   string
 	TerminalPassword string
 	TerminalLogin    string
+	AccountType      string
 	Cel              string
 	Photo            string
 	Name             string
@@ -443,13 +444,13 @@ func GetAuthToken(db *sql.DB, authToken string) (*Login_credentials_hdr, error) 
 	s_login_credentials := Login_credentials_hdr{}
 	fmt.Println("AUTH" + authToken)
 
-	stmt, err := db.Prepare("select u.password_salt, u.password, u.id, u.terminal_login, u.terminal_id , u.terminal_serial,terminal_password ,cel, email from user_tokens t, user_credentials u where t.user_credential_id=u.id and t.token=$1 and u.status=1")
+	stmt, err := db.Prepare("select u.password_salt, u.password, u.id, u.terminal_login, u.terminal_id , u.terminal_serial,terminal_password ,cel, email, u.account_type from user_tokens t, user_credentials u where t.user_credential_id=u.id and t.token=$1 and u.status=1")
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer stmt.Close()
 
-	err = stmt.QueryRow(authToken).Scan(&s_login_credentials.PasswordSalt, &s_login_credentials.Password, &s_login_credentials.Id, &s_login_credentials.TerminalLogin, &s_login_credentials.TerminalId, &s_login_credentials.TerminalSerial, &s_login_credentials.TerminalPassword, &s_login_credentials.Cel, &s_login_credentials.Email)
+	err = stmt.QueryRow(authToken).Scan(&s_login_credentials.PasswordSalt, &s_login_credentials.Password, &s_login_credentials.Id, &s_login_credentials.TerminalLogin, &s_login_credentials.TerminalId, &s_login_credentials.TerminalSerial, &s_login_credentials.TerminalPassword, &s_login_credentials.Cel, &s_login_credentials.Email, &s_login_credentials.AccountType)
 
 	if err != nil {
 		fmt.Println(err)

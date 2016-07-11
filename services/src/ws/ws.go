@@ -690,12 +690,12 @@ func GetBillImage(s_credentials *db.Login_credentials_hdr, boletoId string) (*WS
 		return nil, err
 	}
 
-	//	fmt.Println(result)
 	binResult := make([]byte, len(s_response_createBill.XMLAgents.GetBillImage.Image))
 
 	_, err = hex.Decode(binResult, []byte(s_response_createBill.XMLAgents.GetBillImage.Image))
 
 	if err != nil {
+		fmt.Println(err)
 		return nil, err
 	}
 	b64Encoded := b64.StdEncoding.EncodeToString([]byte(binResult))
@@ -1024,12 +1024,26 @@ func DoPaymentTransNFC1(s_credentials *db.Login_credentials_hdr, serviceId strin
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_card_type = Ev_card_type
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_card_uid = Ev_card_uid
 
-	result, _, err := send(s_credentials, &requestType)
-	if err != nil {
-		return nil, err
-	}
+	testResult := `<response result="0">
+  <providers>
+    <checkPaymentRequisites result="0">
+      <payment id="1" result="0" date="2016-02-29T19:02:38-03:00" status="3" uid="1">
+        <extras disp1="4acfc3ae-16df-e511-9177-005056811e9e" disp2="[&quot;FF820060067B296F353C6B&quot;,&quot;FFB0000110&quot;,&quot;FFB0000210&quot;,&quot;FF820060063FA7217EC575&quot;,&quot;FFB0000410&quot;,&quot;FFB0000510&quot;,&quot;FFB0000610&quot;]" />
+      </payment>
+    </checkPaymentRequisites>
+  </providers>
+</response>`
 
-	//	fmt.Println(result)
+	var result *string
+	var err error
+	if os.Getenv("QIWI_SIMULATION") != "" {
+		result = &testResult
+	} else {
+		result, _, err = send(s_credentials, &requestType)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	if err := xml.NewDecoder(strings.NewReader(*result)).Decode(&s_response_createBill); err != nil {
 		return nil, err

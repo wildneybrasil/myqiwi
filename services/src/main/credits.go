@@ -4,6 +4,7 @@ package main
 import (
 	"db"
 	"fmt"
+	"strconv"
 	"ws"
 )
 
@@ -86,8 +87,16 @@ func createBill(s_createBill_request s_createBill_request_hdr) (s_createBill_res
 
 	defer dbConn.Close()
 
+	floatvalue, _ := strconv.ParseFloat(s_createBill_request.Amount, 64)
+	if floatvalue == 0 || floatvalue < 10 {
+		s_createBill_response.StatusCode = 400
+		s_createBill_response.ErrorMessage = "O valor mínimo para gerar créditos é de R$10,00"
+		return s_createBill_response, nil
+	}
+
 	s_login_credentials, err := db.GetAuthToken(dbConn, s_createBill_request.AuthToken)
 	if err == nil && s_login_credentials.Id > 0 {
+
 		WScreateBillResponse, err := ws.CreateBill(s_login_credentials, s_createBill_request.Amount)
 		if err != nil {
 			s_createBill_response.StatusCode = 500
@@ -138,6 +147,9 @@ func getBillInfo(s_getBill_request s_getBill_request_hdr) (s_geBill_image_respon
 				s_geBill_image_response.ErrorMessage = "Internal server error"
 				return s_geBill_image_response, nil
 			}
+			s_geBill_image_response.Data = &s_geBill_image_data_response{}
+			fmt.Println("PDF: " + boletoImage.XMLAgents.GetBillImage.Image)
+			s_geBill_image_response.Data.Image = boletoImage.XMLAgents.GetBillImage.Image
 		}
 		if s_getBill_request.Info {
 			boletoInfo, err = ws.GetBillInfo(s_login_credentials, s_getBill_request.BoletoId)
@@ -146,32 +158,34 @@ func getBillInfo(s_getBill_request s_getBill_request_hdr) (s_geBill_image_respon
 				s_geBill_image_response.ErrorMessage = "Internal server error"
 				return s_geBill_image_response, nil
 			}
+			if s_geBill_image_response.Data == nil {
+				s_geBill_image_response.Data = &s_geBill_image_data_response{}
+
+			}
+			s_geBill_image_response.Data.BankName = boletoInfo.XMLAgents.GetBillImage.Bill.BankName
+			s_geBill_image_response.Data.Comission = boletoInfo.XMLAgents.GetBillImage.Bill.Comission
+			s_geBill_image_response.Data.CreateTime = boletoInfo.XMLAgents.GetBillImage.Bill.CreateTime
+			s_geBill_image_response.Data.ExpireDate = boletoInfo.XMLAgents.GetBillImage.Bill.ExpireDate
+			s_geBill_image_response.Data.Instructions = boletoInfo.XMLAgents.GetBillImage.Bill.Instructions
+			s_geBill_image_response.Data.Ipte = boletoInfo.XMLAgents.GetBillImage.Bill.Ipte
+			s_geBill_image_response.Data.IssuerAgentId = boletoInfo.XMLAgents.GetBillImage.Bill.IssuerAgentId
+			s_geBill_image_response.Data.IssuerAgentInn = boletoInfo.XMLAgents.GetBillImage.Bill.IssuerAgentInn
+			s_geBill_image_response.Data.IssuerAgentName = boletoInfo.XMLAgents.GetBillImage.Bill.IssuerAgentName
+			s_geBill_image_response.Data.OwnNumber = boletoInfo.XMLAgents.GetBillImage.Bill.OwnNumber
+			s_geBill_image_response.Data.ReceiverAddress = boletoInfo.XMLAgents.GetBillImage.Bill.ReceiverAddress
+			s_geBill_image_response.Data.ReceiverInn = boletoInfo.XMLAgents.GetBillImage.Bill.ReceiverInn
+			s_geBill_image_response.Data.TypeLine = boletoInfo.XMLAgents.GetBillImage.Bill.TypeLine
+			customValues := make([]s_geBill_image_data_response_items, 0)
+			for _, v := range boletoInfo.XMLAgents.GetBillImage.Bill.CustomFields.Field {
+				value := s_geBill_image_data_response_items{}
+				value.Id = v.Id
+				value.Name = v.Name
+				value.Value = v.Value
+
+				customValues = append(customValues, value)
+			}
 		}
-		s_geBill_image_response.Data.Image = boletoImage.XMLAgents.GetBillImage.Image
 
-		s_geBill_image_response.Data.BankName = boletoInfo.XMLAgents.GetBillImage.Bill.BankName
-		s_geBill_image_response.Data.Comission = boletoInfo.XMLAgents.GetBillImage.Bill.Comission
-		s_geBill_image_response.Data.CreateTime = boletoInfo.XMLAgents.GetBillImage.Bill.CreateTime
-		s_geBill_image_response.Data.ExpireDate = boletoInfo.XMLAgents.GetBillImage.Bill.ExpireDate
-		s_geBill_image_response.Data.Instructions = boletoInfo.XMLAgents.GetBillImage.Bill.Instructions
-		s_geBill_image_response.Data.Ipte = boletoInfo.XMLAgents.GetBillImage.Bill.Ipte
-		s_geBill_image_response.Data.IssuerAgentId = boletoInfo.XMLAgents.GetBillImage.Bill.IssuerAgentId
-		s_geBill_image_response.Data.IssuerAgentInn = boletoInfo.XMLAgents.GetBillImage.Bill.IssuerAgentInn
-		s_geBill_image_response.Data.IssuerAgentName = boletoInfo.XMLAgents.GetBillImage.Bill.IssuerAgentName
-		s_geBill_image_response.Data.OwnNumber = boletoInfo.XMLAgents.GetBillImage.Bill.OwnNumber
-		s_geBill_image_response.Data.ReceiverAddress = boletoInfo.XMLAgents.GetBillImage.Bill.ReceiverAddress
-		s_geBill_image_response.Data.ReceiverInn = boletoInfo.XMLAgents.GetBillImage.Bill.ReceiverInn
-		s_geBill_image_response.Data.TypeLine = boletoInfo.XMLAgents.GetBillImage.Bill.TypeLine
-
-		customValues := make([]s_geBill_image_data_response_items, 0)
-		for _, v := range boletoInfo.XMLAgents.GetBillImage.Bill.CustomFields.Field {
-			value := s_geBill_image_data_response_items{}
-			value.Id = v.Id
-			value.Name = v.Name
-			value.Value = v.Value
-
-			customValues = append(customValues, value)
-		}
 		return s_geBill_image_response, nil
 	} else {
 		s_geBill_image_response.StatusCode = 403

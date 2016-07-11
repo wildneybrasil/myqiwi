@@ -59,7 +59,7 @@ func transferCredits1(s_transferCredits_request s_transferCredits_request_hdr) (
 	if err != nil || s_rcpt_info == nil {
 		s_transferCredits_response.Status = "failed"
 		s_transferCredits_response.StatusCode = 404
-		s_transferCredits_response.ErrorMessage = "Telefone não cadastrado no QIWI"
+		s_transferCredits_response.ErrorMessage = "Esta conta MyQiwi é inexistente"
 		return s_transferCredits_response, nil
 	}
 

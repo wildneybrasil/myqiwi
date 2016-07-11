@@ -372,7 +372,7 @@ func main() {
 			c.JSON(http.StatusOK, s_result)
 		}
 	})
-	r.POST("/ws/paymentNFC/5", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
+	r.POST("/ws/paymentNFC/4", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
 		s_payment_request := s_payment_request_hdr{}
 		if c.BindJSON(&s_payment_request) == nil {
 			s_result, err := paymentNFC4(s_payment_request)
