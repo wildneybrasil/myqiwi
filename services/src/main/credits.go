@@ -90,6 +90,7 @@ func createBill(s_createBill_request s_createBill_request_hdr) (s_createBill_res
 	floatvalue, _ := strconv.ParseFloat(s_createBill_request.Amount, 64)
 	if floatvalue == 0 || floatvalue < 10 {
 		s_createBill_response.StatusCode = 400
+		s_createBill_response.Status = "failed"
 		s_createBill_response.ErrorMessage = "O valor mínimo para gerar créditos é de R$10,00"
 		return s_createBill_response, nil
 	}
@@ -100,6 +101,7 @@ func createBill(s_createBill_request s_createBill_request_hdr) (s_createBill_res
 		WScreateBillResponse, err := ws.CreateBill(s_login_credentials, s_createBill_request.Amount)
 		if err != nil {
 			s_createBill_response.StatusCode = 500
+			s_createBill_response.Status = "failed"
 			s_createBill_response.ErrorMessage = "Internal server error"
 		} else {
 			if WScreateBillResponse.Result != "0" {
@@ -113,8 +115,10 @@ func createBill(s_createBill_request s_createBill_request_hdr) (s_createBill_res
 			s_createBill_response.Data = &s_createBill_response_data_hdr{}
 			s_createBill_response.Data.Amount = WScreateBillResponse.XMLAgents.CreateBill.BoletoBill.Amount
 			s_createBill_response.Data.Id = WScreateBillResponse.XMLAgents.CreateBill.BoletoBill.Id
+			s_createBill_response.Status = "success"
 		}
 	} else {
+		s_createBill_response.Status = "failed"
 		s_createBill_response.StatusCode = 403
 		s_createBill_response.ErrorMessage = "Login/Senha inválido"
 	}
@@ -143,6 +147,7 @@ func getBillInfo(s_getBill_request s_getBill_request_hdr) (s_geBill_image_respon
 		if s_getBill_request.Pdf {
 			boletoImage, err = ws.GetBillImage(s_login_credentials, s_getBill_request.BoletoId)
 			if err != nil {
+				s_geBill_image_response.Status = "failed"
 				s_geBill_image_response.StatusCode = 500
 				s_geBill_image_response.ErrorMessage = "Internal server error"
 				return s_geBill_image_response, nil
@@ -154,6 +159,7 @@ func getBillInfo(s_getBill_request s_getBill_request_hdr) (s_geBill_image_respon
 		if s_getBill_request.Info {
 			boletoInfo, err = ws.GetBillInfo(s_login_credentials, s_getBill_request.BoletoId)
 			if err != nil {
+				s_geBill_image_response.Status = "failed"
 				s_geBill_image_response.StatusCode = 500
 				s_geBill_image_response.ErrorMessage = "Internal server error"
 				return s_geBill_image_response, nil
@@ -184,10 +190,13 @@ func getBillInfo(s_getBill_request s_getBill_request_hdr) (s_geBill_image_respon
 
 				customValues = append(customValues, value)
 			}
+			s_geBill_image_response.Data.CustomFields = customValues
 		}
+		s_geBill_image_response.Status = "success"
 
 		return s_geBill_image_response, nil
 	} else {
+		s_geBill_image_response.Status = "failed"
 		s_geBill_image_response.StatusCode = 403
 		s_geBill_image_response.ErrorMessage = "Login/Senha inválido"
 	}
@@ -213,6 +222,7 @@ func getBalance(s_balance_request s_balance_request_hdr) (s_balance_response s_b
 	if err == nil && s_login_credentials.Id > 0 {
 		balance, overdraft, err := ws.GetBalance(s_login_credentials)
 		if err != nil {
+			s_balance_response.Status = "failed"
 			s_balance_response.StatusCode = 500
 			s_balance_response.ErrorMessage = "Internal server error"
 		} else {
@@ -222,6 +232,7 @@ func getBalance(s_balance_request s_balance_request_hdr) (s_balance_response s_b
 			s_balance_response.Data.Overdraft = *overdraft
 		}
 	} else {
+		s_balance_response.Status = "failed"
 		s_balance_response.StatusCode = 403
 		s_balance_response.ErrorMessage = "Login/Senha inválido"
 	}

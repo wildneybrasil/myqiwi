@@ -49,7 +49,7 @@ type s_XMLCreateBill_hdr struct {
 type s_XMLGetBillField struct {
 	Id    string `xml:"id,attr,omitempty"`
 	Name  string `xml:"name,attr,omitempty"`
-	Value string `xml:"value,attr,omitempty"`
+	Value string `xml:"value,attr"`
 }
 type s_XMLGetBillFields struct {
 	Field []s_XMLGetBillField `xml:"field,omitempty"`
@@ -57,20 +57,20 @@ type s_XMLGetBillFields struct {
 type s_XMLGetBillBill struct {
 	CustomFields    s_XMLGetBillFields `xml:"custom-fields,omitempty"`
 	Image           string             `xml:"image,attr,omitempty"`
-	IssuerAgentId   string             `xml:"issuerAgentId,attr,omitempty"`
-	IssuerAgentName string             `xml:"issuerAgentName,attr,omitempty"`
+	IssuerAgentId   string             `xml:"issuer-agentId,attr,omitempty"`
+	IssuerAgentName string             `xml:"issuer-agent-name,attr,omitempty"`
 	Amount          string             `xml:"amount,attr,omitempty"`
 	Comission       string             `xml:"comission,attr,omitempty"`
-	BankName        string             `xml:"bankName,attr,omitempty"`
-	ExpireDate      string             `xml:"expireDate,attr,omitempty"`
-	CreateTime      string             `xml:"createTime,attr,omitempty"`
+	BankName        string             `xml:"bank-name,attr,omitempty"`
+	ExpireDate      string             `xml:"expire-date,attr,omitempty"`
+	CreateTime      string             `xml:"create-time,attr,omitempty"`
 	Instructions    string             `xml:"instructions,attr,omitempty"`
-	ReceiverAddress string             `xml:"receiverAddress,attr,omitempty"`
-	ReceiverInn     string             `xml:"receiverInn,attr,omitempty"`
-	IssuerAgentInn  string             `xml:"issuerAgentInn,attr,omitempty"`
+	ReceiverAddress string             `xml:"receiver-address,attr,omitempty"`
+	ReceiverInn     string             `xml:"receiver-inn,attr,omitempty"`
+	IssuerAgentInn  string             `xml:"issuer-agent-inn,attr,omitempty"`
 	Ipte            string             `xml:"ipte,attr,omitempty"`
-	TypeLine        string             `xml:"typeLine,attr,omitempty"`
-	OwnNumber       string             `xml:"ownNumber,attr,omitempty"`
+	TypeLine        string             `xml:"type-line,attr,omitempty"`
+	OwnNumber       string             `xml:"own-number,attr,omitempty"`
 }
 
 type s_XMLGetBillImage_hdr struct {
@@ -128,6 +128,7 @@ type s_XMLPaymentExtras struct {
 	Disp3                string `xml:"disp3,attr,omitempty"`
 	Disp4                string `xml:"disp4,attr,omitempty"`
 	PrtData1             string `xml:"prt-data1,attr,omitempty"`
+	RptData1             string `xml:"rpt-data1,attr,omitempty"`
 	PrtData2             string `xml:"prt-data2,attr,omitempty"`
 	PrtData3             string `xml:"prt-data3,attr,omitempty"`
 	Ev_card_number       string `xml:"ev_card_number,attr,omitempty"`
@@ -1036,7 +1037,7 @@ func DoPaymentTransNFC1(s_credentials *db.Login_credentials_hdr, serviceId strin
 
 	var result *string
 	var err error
-	if os.Getenv("QIWI_SIMULATION") != "" {
+	if s_credentials.AccountType == "TEST" {
 		result = &testResult
 	} else {
 		result, _, err = send(s_credentials, &requestType)
@@ -1076,11 +1077,26 @@ func DoPaymentTransNFC2(s_credentials *db.Login_credentials_hdr, id string, sess
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_session_guid = session
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_card_data = ev_card_data
 
-	result, _, err := send(s_credentials, &requestType)
-	if err != nil {
-		return nil, err
-	}
+	testResult := `<response result="0">
+  <providers>
+    <checkPaymentRequisites result="0">
+      <payment id="1" result="0" date="2016-02-29T19:02:41-03:00" status="3" uid="1">
+        <extras disp1="[&quot;FF820061061CB5345E7E4D&quot;,&quot;FFB0002810&quot;,&quot;FFB0002910&quot;,&quot;FFB0002A10&quot;,&quot;FFB0003410&quot;,&quot;FFB0003510&quot;,&quot;FFB0003610&quot;,&quot;FF820061069AFCF5C3600B&quot;,&quot;FFB0003010&quot;,&quot;FFB0003110&quot;,&quot;FFB0003210&quot;,&quot;FFB0003C10&quot;,&quot;FFB0003D10&quot;,&quot;FFB0003E10&quot;]" />
+      </payment>
+    </checkPaymentRequisites>
+  </providers>
+</response>`
 
+	var result *string
+	var err error
+	if s_credentials.AccountType == "TEST" {
+		result = &testResult
+	} else {
+		result, _, err = send(s_credentials, &requestType)
+		if err != nil {
+			return nil, err
+		}
+	}
 	//	fmt.Println(result)
 
 	if err := xml.NewDecoder(strings.NewReader(*result)).Decode(&s_response_createBill); err != nil {
@@ -1113,9 +1129,25 @@ func DoPaymentTransNFC3(s_credentials *db.Login_credentials_hdr, id string, sess
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_session_guid = session
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_card_data = Ev_card_data
 
-	result, _, err := send(s_credentials, &requestType)
-	if err != nil {
-		return nil, err
+	testResult := `<response result="0">
+  <providers>
+    <checkPaymentRequisites result="0">
+      <payment id="1" result="0" date="2016-02-29T19:02:45-03:00" status="3" uid="1">
+        <extras disp1="{&quot;locked&quot;:false,&quot;wallets&quot;:[{&quot;blocked&quot;:false,&quot;code&quot;:&quot;500&quot;,&quot;nominals&quot;:[{&quot;id&quot;:&quot;1&quot;,&quot;value&quot;:&quot;200&quot;},{&quot;id&quot;:&quot;2&quot;,&quot;value&quot;:&quot;500&quot;},{&quot;id&quot;:&quot;3&quot;,&quot;value&quot;:&quot;1000&quot;},{&quot;id&quot;:&quot;4&quot;,&quot;value&quot;:&quot;2000&quot;},{&quot;id&quot;:&quot;5&quot;,&quot;value&quot;:&quot;5000&quot;},{&quot;id&quot;:&quot;6&quot;,&quot;value&quot;:&quot;10000&quot;}],&quot;title&quot;:&quot;Nosso Cidadão&quot;,&quot;value&quot;:&quot;840&quot;}]}" />
+      </payment>
+    </checkPaymentRequisites>
+  </providers>
+</response>`
+
+	var result *string
+	var err error
+	if s_credentials.AccountType == "TEST" {
+		result = &testResult
+	} else {
+		result, _, err = send(s_credentials, &requestType)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	//	fmt.Println(result)
@@ -1126,7 +1158,7 @@ func DoPaymentTransNFC3(s_credentials *db.Login_credentials_hdr, id string, sess
 
 	return &s_response_createBill, nil
 }
-func DoPaymentTransNFC4(s_credentials *db.Login_credentials_hdr, id string, session string, amount string, serviceId string, ev_nominal string) (*WSResponse_transferCredits_hdr, error) {
+func DoPaymentTransNFC4(s_credentials *db.Login_credentials_hdr, id string, session string, amount string, serviceId string, ev_nominal string, ev_wallet_code string) (*WSResponse_transferCredits_hdr, error) {
 	fmt.Println("GET CREATE BILL")
 
 	s_response_createBill := WSResponse_transferCredits_hdr{}
@@ -1149,10 +1181,28 @@ func DoPaymentTransNFC4(s_credentials *db.Login_credentials_hdr, id string, sess
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_isWeb = "1"
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_session_guid = session
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_nominal = ev_nominal
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_wallet_code = ev_wallet_code
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_exact_amount = amount
 
-	result, _, err := send(s_credentials, &requestType)
-	if err != nil {
-		return nil, err
+	testResult := `<response result="0">
+  <providers>
+    <checkPaymentRequisites result="0">
+      <payment id="1" result="0" date="2016-02-29T19:02:56-03:00" status="3" uid="1">
+        <extras disp1="[&quot;FF820061069AFCF5C3600B&quot;,&quot;FFD6003010120000000000000000C02B092E310040&quot;,&quot;FFD600311001E600065E892C0BA000000000000000&quot;,&quot;FFD600321014BFC0390C03000000000065450E3EDD&quot;,&quot;FF820061061CB5345E7E4D&quot;,&quot;FFD600281002000000000000000000000000000000&quot;,&quot;FFD600291000000000000000000000FCFFFFFFFFFF&quot;,&quot;FFD6002A10FFFFFFFFFFFFFFFFFFFF4709097F73FA&quot;,&quot;FF820060067B296F353C6B&quot;,&quot;FFD600010401000080&quot;]" />
+      </payment>
+    </checkPaymentRequisites>
+  </providers>
+</response>`
+
+	var result *string
+	var err error
+	if s_credentials.AccountType == "TEST" {
+		result = &testResult
+	} else {
+		result, _, err = send(s_credentials, &requestType)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	//	fmt.Println(result)
@@ -1163,7 +1213,7 @@ func DoPaymentTransNFC4(s_credentials *db.Login_credentials_hdr, id string, sess
 
 	return &s_response_createBill, nil
 }
-func DoPaymentTransNFC5(s_credentials *db.Login_credentials_hdr, id string, session string, amount string, serviceId string, Ev_nominal string, Ev_wallet_code string) (*WSResponse_transferCredits_hdr, error) {
+func DoPaymentTransNFC5(s_credentials *db.Login_credentials_hdr, id string, session string, amount string, serviceId string) (*WSResponse_transferCredits_hdr, error) {
 	s_response_createBill := WSResponse_transferCredits_hdr{}
 
 	currentDate := arrow.Now().CFormat("%Y-%m-%dT%H:%M:%S")
@@ -1191,12 +1241,28 @@ func DoPaymentTransNFC5(s_credentials *db.Login_credentials_hdr, id string, sess
 	requestType.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLPaymentExtras.Ev_useExistsVouchers = "true"
 	requestType.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLPaymentExtras.Ev_session_guid = session
 
-	result, _, err := send(s_credentials, &requestType)
-	if err != nil {
-		return &s_response_createBill, err
-	}
+	testResult := `<response result="0">
+  <providers>
+    <purchaseOnline result="0">
+      <payment id="201462" result="0" date="2016-02-29T16:00:49-03:00" status="2" uid="2267743">
+        <voucher code="1095915915897659" amount="181.00" currency="986" />
+        <extras prt-data1="Mensagem=Data: 29/02/2016        Hora: 15:54&#xA;Terminal: 7494&#xA;Transacao: 6352130&#xA;&#xA;    Comprovante de Recarga - GWTrans&#xA;  &#xA;  &#xA;Cartao: 23.06.00657601-1&#xA;&#xA;NOSSO Cidadao&#xA;&#xA;Saldo Anterior: R$ 8,40&#xA;Valor Recarregado: R$ 10,00&#xA;Valor Pago: R$ 10,00 &#xA;Saldo Atual: R$ 18,40&#xA;&#xA;     ------------------------------&#xA;&#xA;&#xA;&#xA;&#xA;SAC: 0800 77 10 118&#xA;" rpt-data1="6352130" />
+      </payment>
+    </purchaseOnline>
+  </providers>
+</response>
+`
 
-	//	fmt.Println(result)
+	var result *string
+	var err error
+	if s_credentials.AccountType == "TEST" {
+		result = &testResult
+	} else {
+		result, _, err = send(s_credentials, &requestType)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	s_response_createBill.XMLProvider.XMLPurchaseOnline = &s_XMLPurchaseOnline{}
 	s_response_createBill.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLVoucher = &s_XMLVoucher{}

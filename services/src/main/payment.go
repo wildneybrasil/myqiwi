@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"ws"
+
+	"html"
 )
 
 type s_boletoResponse_data_hdr struct {
@@ -51,12 +53,15 @@ type s_payment_request_hdr struct {
 }
 
 type s_payment_response_data_hdr struct {
-	PIN      string                 `json:"pin,omitempty"`
-	Serial   string                 `json:"serial,omitempty"`
-	Session  string                 `json:"session,omitempty"`
-	Info     string                 `json:"info,omitempty"`
-	Id       string                 `json:"id,omitempty"`
-	Nominals *s_values_response_hdr `json:"nominals,omitempty"`
+	PIN         string                 `json:"pin,omitempty"`
+	Serial      string                 `json:"serial,omitempty"`
+	Session     string                 `json:"session,omitempty"`
+	Info        string                 `json:"info,omitempty"`
+	Id          string                 `json:"id,omitempty"`
+	VoucherCode string                 `json:"id,omitempty"`
+	PrtData1    string                 `json:"prtData1,omitempty"`
+	RptData1    string                 `json:"rptData1,omitempty"`
+	Nominals    *s_values_response_hdr `json:"nominals,omitempty"`
 }
 type s_payment_response_hdr struct {
 	s_status
@@ -95,6 +100,12 @@ func getBoletoInfo(s_boletoInfo_request s_boletoInfo_request_hdr) (s_boletoRespo
 		if transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Result != "0" || transferResponse.XMLProvider.XMLCheckPaymentRequisites.Result != "0" {
 			s_boletoResponse.StatusCode = 400
 			s_boletoResponse.ErrorMessage = "Internal server error"
+			s_boletoResponse.Status = "failed"
+			return s_boletoResponse, nil
+		}
+		if transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp3 != "true" {
+			s_boletoResponse.StatusCode = 400
+			s_boletoResponse.ErrorMessage = html.UnescapeString(transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp3)
 			s_boletoResponse.Status = "failed"
 			return s_boletoResponse, nil
 		}
@@ -653,6 +664,7 @@ func paymentNFC3(s_payment_request s_payment_request_hdr) (s_payment_response s_
 		s_payment_response.Data = &s_payment_response_data_hdr{}
 
 		s_payment_response.Data.Info = transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp1
+		s_payment_response.Status = "success"
 	} else {
 		s_payment_response.StatusCode = 403
 		s_payment_response.ErrorMessage = "Login/Senha inválido"
@@ -678,7 +690,7 @@ func paymentNFC4(s_payment_request s_payment_request_hdr) (s_payment_response s_
 
 			return s_payment_response, nil
 		}
-		transferResponse, err := ws.DoPaymentTransNFC4(s_login_credentials, s_payment_request.Id, s_payment_request.Session, s_payment_request.Amount, s_payment_request.Service, s_payment_request.EvNominal)
+		transferResponse, err := ws.DoPaymentTransNFC4(s_login_credentials, s_payment_request.Id, s_payment_request.Session, s_payment_request.Amount, s_payment_request.Service, s_payment_request.EvNominal, s_payment_request.Ev_wallet_code)
 
 		if err != nil {
 			s_payment_response.Status = "failed"
@@ -700,6 +712,7 @@ func paymentNFC4(s_payment_request s_payment_request_hdr) (s_payment_response s_
 		s_payment_response.Data.Session = transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp1
 		s_payment_response.Data.Id = transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Id
 		s_payment_response.Data.Info = transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp2
+		s_payment_response.Status = "success"
 
 	} else {
 		s_payment_response.StatusCode = 403
@@ -725,8 +738,7 @@ func paymentNFC5(s_payment_request s_payment_request_hdr) (s_payment_response s_
 
 			return s_payment_response, nil
 		}
-		transferResponse, err := ws.DoPaymentTransNFC5(s_login_credentials, s_payment_request.Id, s_payment_request.Session, s_payment_request.Amount, s_payment_request.Service, s_payment_request.EvNominal, s_payment_request.Ev_wallet_code)
-		//func DoPaymentTransNFC5(s_credentials *db.Login_credentials_hdr, id string, session string, cardNumber string, serviceId string, Ev_force string, Ev_step string, Ev_isnom string, Ev_reqtype string, Ev_card_data string, Ev_nominal string, Ev_wallet_code string) (*WSResponse_transferCredits_hdr, error) {
+		transferResponse, err := ws.DoPaymentTransNFC5(s_login_credentials, s_payment_request.Id, s_payment_request.Session, s_payment_request.Amount, s_payment_request.Service)
 
 		if err != nil {
 			s_payment_response.Status = "failed"
@@ -734,20 +746,23 @@ func paymentNFC5(s_payment_request s_payment_request_hdr) (s_payment_response s_
 			s_payment_response.ErrorMessage = "Internal server error"
 			return s_payment_response, nil
 		}
-		if transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Result != "0" {
-			s_payment_response.ErrorMessage, s_payment_response.StatusCode = ws.GetErrorMessage(transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Result)
+		if transferResponse.XMLProvider.XMLPurchaseOnline.Result != "0" {
+			s_payment_response.ErrorMessage, s_payment_response.StatusCode = ws.GetErrorMessage(transferResponse.XMLProvider.XMLPurchaseOnline.Result)
+
 			return s_payment_response, nil
 		}
-		if transferResponse.XMLProvider.XMLCheckPaymentRequisites.Result != "0" {
-			s_payment_response.ErrorMessage, s_payment_response.StatusCode = ws.GetErrorMessage(transferResponse.XMLProvider.XMLCheckPaymentRequisites.Result)
+		if transferResponse.XMLProvider.XMLPurchaseOnline.XMLPayment.Result != "0" {
+			s_payment_response.ErrorMessage, s_payment_response.StatusCode = ws.GetErrorMessage(transferResponse.XMLProvider.XMLPurchaseOnline.XMLPayment.Result)
+
 			return s_payment_response, nil
 		}
 
 		s_payment_response.Data = &s_payment_response_data_hdr{}
 
-		s_payment_response.Data.Session = transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp1
-		s_payment_response.Data.Id = transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Id
-		s_payment_response.Data.Info = transferResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp2
+		s_payment_response.Data.VoucherCode = transferResponse.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLVoucher.Code
+		s_payment_response.Data.PrtData1 = transferResponse.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLPaymentExtras.PrtData1
+		s_payment_response.Data.RptData1 = transferResponse.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLPaymentExtras.RptData1
+		s_payment_response.Status = "success"
 
 	} else {
 		s_payment_response.StatusCode = 403
