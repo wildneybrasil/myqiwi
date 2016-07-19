@@ -94,6 +94,12 @@ func createBill(s_createBill_request s_createBill_request_hdr) (s_createBill_res
 		s_createBill_response.ErrorMessage = "O valor mínimo para gerar créditos é de R$10,00"
 		return s_createBill_response, nil
 	}
+	if floatvalue > 10000 {
+		s_createBill_response.StatusCode = 400
+		s_createBill_response.Status = "failed"
+		s_createBill_response.ErrorMessage = "O valor máximo para gerar créditos é de R$10000,00"
+		return s_createBill_response, nil
+	}
 
 	s_login_credentials, err := db.GetAuthToken(dbConn, s_createBill_request.AuthToken)
 	if err == nil && s_login_credentials.Id > 0 {
