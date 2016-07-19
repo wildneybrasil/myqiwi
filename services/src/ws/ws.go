@@ -765,6 +765,12 @@ func GetHistory(s_credentials *db.Login_credentials_hdr) (*WSResponse_hystory_hd
 	return &s_response_createBill, nil
 }
 func splitCelDDD(phone string) string {
+
+	phone = strings.Replace(phone, " ", "", -1)
+	phone = strings.Replace(phone, "(", "", -1)
+	phone = strings.Replace(phone, ")", "", -1)
+	phone = strings.Replace(phone, "-", "", -1)
+
 	if len(phone) == 0 {
 		return "(99)999999999"
 	}

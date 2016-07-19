@@ -214,7 +214,7 @@ func payment1(s_payment_request s_payment_request_hdr) (s_payment_response s_pay
 
 		// telefonia
 		if s_payment_request.Type == "telefonia" {
-			transferResponse, err := ws.DoPaymentTel1(s_login_credentials, s_payment_request.Rcpt, s_payment_request.Service, forceAmount, evStep, isNom, reqType)
+			transferResponse, err := ws.DoPaymentTel1(s_login_credentials, strings.Replace(s_payment_request.Rcpt, " ", "", -1), s_payment_request.Service, forceAmount, evStep, isNom, reqType)
 
 			if err != nil {
 				s_payment_response.StatusCode = 500
@@ -449,7 +449,7 @@ func payment2(s_payment_request s_payment_request_hdr) (s_payment_response s_pay
 
 		default:
 			fmt.Println("TEL 2")
-			transferResponse1, err := ws.DoPaymentTel2(s_login_credentials, s_payment_request.Id, s_payment_request.Rcpt, s_payment_request.Service, s_payment_request.Amount)
+			transferResponse1, err := ws.DoPaymentTel2(s_login_credentials, s_payment_request.Id, strings.Replace(s_payment_request.Rcpt, " ", "", -1), s_payment_request.Service, s_payment_request.Amount)
 			if err != nil {
 				s_payment_response.StatusCode = 500
 				s_payment_response.Status = "failed"
