@@ -1,3 +1,3 @@
 #!/bin/sh
-rsync --progress -avz main admin@ec2-54-207-24-178.sa-east-1.compute.amazonaws.com:/QIWI/services/services
+rsync --progress -avz main  b.inventt@10.203.30.56:/QIWI/services/services
 

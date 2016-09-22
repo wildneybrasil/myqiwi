@@ -31,6 +31,8 @@ type s_redis_create_account_hdr struct {
 	Document       string `json:"document"`
 	Photo          string `json:"photo"`
 	Salt           string `json:"salt"`
+	DeviceSerial   string `json:"deviceSerial"`
+	DeviceType     string `json:"deviceType"`
 	ActivationCode string `json:"activationCode"`
 	AuthToken      string `json:"authToken"`
 }
@@ -83,6 +85,8 @@ type s_login_create_request_hdr struct {
 	Document string `json:"document"`
 	Cel      string `json:"cel"`
 	Photo    string `json:"photo"`
+	DeviceType     string `json:"deviceType"`
+	DeviceSerial     string `json:"deviceSerial"`
 }
 type s_login_pos_create_request_hdr struct {
 	AuthToken  string `json:"authToken"`
@@ -91,6 +95,7 @@ type s_login_pos_create_request_hdr struct {
 	Name       string `json:"name"`
 	Document   string `json:"document"`
 	Cel        string `json:"cel"`
+	DeviceSerial   string `json:"deviceSerial"`
 	TerminalId string `json:"terminalId"`
 }
 type s_login_response_data_hdr struct {
@@ -156,15 +161,34 @@ func createLogin(s_login_create_request s_login_create_request_hdr) (s_login_cre
 	dbConn := db.Connect()
 	defer dbConn.Close()
 
+	var isPOS bool;
+
+	if( s_login_create_request.DeviceType !=""){
+		if( s_login_create_request.DeviceType == "POYNT"){
+			isPOS = true;
+		} else {
+			s_login_create_response.Status = "failed"
+			s_login_create_response.StatusCode = 400
+			s_login_create_response.ErrorMessage = "tipo de terminal desconhecido"
+
+			return s_login_create_response, nil
+		}
+	}
+
+
+
 	cpf := strings.Replace(s_login_create_request.Document, "-", "", -1)
 	cpf = strings.Replace(cpf, ".", "", -1)
-	_, err = db.GetLoginInfoByCPF(dbConn, cpf)
-	if err == nil {
-		s_login_create_response.Status = "failed"
-		s_login_create_response.StatusCode = 400
-		s_login_create_response.ErrorMessage = "CPF ja cadastrado."
 
-		return s_login_create_response, nil
+	if( !isPOS ){
+		_, err = db.GetLoginInfoByCPF(dbConn, cpf)
+		if err == nil {
+			s_login_create_response.Status = "failed"
+			s_login_create_response.StatusCode = 400
+			s_login_create_response.ErrorMessage = "CPF ja cadastrado."
+
+			return s_login_create_response, nil
+		}
 	}
 
 	// verifca se login ja existe
@@ -176,16 +200,16 @@ func createLogin(s_login_create_request s_login_create_request_hdr) (s_login_cre
 
 		return s_login_create_response, nil
 	}
+	if( !isPOS ){
+		vrfyLogin, err = db.GetLoginInfoByCel(dbConn, s_login_create_request.Cel)
+		if vrfyLogin != nil {
+			s_login_create_response.Status = "failed"
+			s_login_create_response.StatusCode = 400
+			s_login_create_response.ErrorMessage = "Telefone ja cadastrado."
 
-	vrfyLogin, err = db.GetLoginInfoByCel(dbConn, s_login_create_request.Cel)
-	if vrfyLogin != nil {
-		s_login_create_response.Status = "failed"
-		s_login_create_response.StatusCode = 400
-		s_login_create_response.ErrorMessage = "Telefone ja cadastrado."
-
-		return s_login_create_response, nil
+			return s_login_create_response, nil
+		}
 	}
-
 	//	result, err := ws.CreateAccount(s_login_create_request.Name, s_login_create_request.Email, "", s_login_create_request.Cel, s_login_create_request.Password)
 	//	if err != nil {
 	//		s_login_create_response.Status = "failed"
@@ -201,9 +225,11 @@ func createLogin(s_login_create_request s_login_create_request_hdr) (s_login_cre
 	s_redis.Email = strings.ToLower(s_login_create_request.Email)
 	s_redis.Photo = s_login_create_request.Photo
 	s_redis.Document = cpf
+	s_redis.DeviceType = s_login_create_request.DeviceType;
 	s_redis.Password = s_login_create_request.Password
 	s_redis.Salt = ""
 	s_redis.AuthToken = authToken
+	s_redis.DeviceSerial = s_login_create_request.DeviceSerial
 	s_redis.ActivationCode = activationCode
 
 	redisString, _ := json.Marshal(s_redis)
@@ -289,7 +315,8 @@ func createPOSLogin(s_login_create_request s_login_pos_create_request_hdr) (s_lo
 	s_redis.Salt = ""
 	s_redis.AuthToken = authToken
 
-	_, err = db.CreateAccount(dbConn, s_redis.Document, s_redis.Email, s_redis.Cel, GetMD5Hash(s_redis.Password), "", s_redis.Name, s_redis.Photo, s_redis.Email, GetMD5Hash(s_redis.Password), s_login_create_request.TerminalId, "POS")
+	accountType:="POS"
+	_, err = db.CreateAccount(dbConn, s_redis.Document, s_redis.Email, s_redis.Cel, GetMD5Hash(s_redis.Password), "", s_redis.Name, s_redis.Photo, s_redis.Email, GetMD5Hash(s_redis.Password), s_login_create_request.TerminalId, "POS",s_login_create_request.DeviceSerial, accountType)
 	if err != nil {
 		panic(err)
 	}
@@ -379,13 +406,13 @@ func login(s_login_request s_login_request_hdr) (s_login_response s_login_respon
 
 		return s_login_response, nil
 	}
-	if s_login_credentials.FailedLoginCount > MAXLOGIN {
-		s_login_response.Status = "failed"
-		s_login_response.StatusCode = 403
-		s_login_response.ErrorMessage = "Conta bloqueada, numero de tentativas excedidas. voce precisa redefinir sua senha."
+	// if s_login_credentials.FailedLoginCount > MAXLOGIN {
+	// 	s_login_response.Status = "failed"
+	// 	s_login_response.StatusCode = 403
+	// 	s_login_response.ErrorMessage = "Conta bloqueada, numero de tentativas excedidas. voce precisa redefinir sua senha."
 
-		return s_login_response, nil
-	}
+	// 	return s_login_response, nil
+	// }
 	if s_login_credentials.Status == 0 {
 		s_login_response.Status = "failed"
 		s_login_response.StatusCode = 403
@@ -399,13 +426,13 @@ func login(s_login_request s_login_request_hdr) (s_login_response s_login_respon
 
 	_, _, err = ws.GetBalance(s_login_credentials)
 	if err != nil {
-		db.IncreaseFailedLoginOfEmail(dbConn, s_login_request.Email)
+//		db.IncreaseFailedLoginOfEmail(dbConn, s_login_request.Email)
 
 		s_login_response.Status = "failed"
 		s_login_response.StatusCode = 403
 		s_login_response.ErrorMessage = "Login/Senha inválido"
 	} else {
-		db.ResetFailedLoginOfEmail(dbConn, s_login_request.Email)
+//		db.ResetFailedLoginOfEmail(dbConn, s_login_request.Email)
 		db.InsertToken(dbConn, s_login_credentials.Id, authToken)
 		db.ChangeTerminalPassword(dbConn, s_login_request.Email, s_login_credentials.TerminalPassword)
 
@@ -448,7 +475,14 @@ func activateAccount(s_request s_activate_request_hdr) (result s_status, err err
 		panic(err)
 	}
 	if s_request.ActivationCode == s_redis.ActivationCode {
-		wsResult, err := ws.CreateAccount(s_redis.Name, s_redis.Email, s_redis.Document, s_redis.Cel, s_redis.Password)
+		deviceType:="MOBILE";
+		accountType:="PRE";
+		if( s_redis.DeviceType!="" ){
+			deviceType=s_redis.DeviceType;
+			accountType="POS"
+		}
+
+		wsResult, err := ws.CreateAccount(s_redis.Name, s_redis.Email, s_redis.Document, s_redis.Cel, s_redis.Password, deviceType, s_redis.DeviceSerial,accountType )
 
 		if err != nil {
 			result.Status = "failed"
@@ -474,7 +508,7 @@ func activateAccount(s_request s_activate_request_hdr) (result s_status, err err
 
 		}
 
-		id, err := db.CreateAccount(dbConn, s_redis.Document, s_redis.Email, s_redis.Cel, GetMD5Hash(s_redis.Password), "", s_redis.Name, s_redis.Photo, s_redis.Email, GetMD5Hash(s_redis.Password), wsResult.XMLPerson.CreateAccount.PointId, "NORMAL")
+		id, err := db.CreateAccount(dbConn, s_redis.Document, s_redis.Email, s_redis.Cel, GetMD5Hash(s_redis.Password), "", s_redis.Name, s_redis.Photo, s_redis.Email, GetMD5Hash(s_redis.Password), wsResult.XMLPerson.CreateAccount.PointId, deviceType, s_redis.DeviceSerial, accountType )
 		if err != nil {
 			panic(err)
 		}

@@ -21,6 +21,8 @@ type s_provider_request_hdr struct {
 }
 type s_history_request_hdr struct {
 	AuthToken string `json:"authToken"`
+	FromDate string  `json:"fromDate"`
+	ToDate string  `json:"toDate"`
 }
 type s_provider_response_row_hdr struct {
 	FiscalName  string `json:"fiscalName"`
@@ -91,7 +93,7 @@ func getHistoryOfUser(s_history_request s_history_request_hdr) (s_history_respon
 
 		return s_history_response, nil
 	}
-	wsResult, err := ws.GetHistory(s_login_credentials)
+	wsResult, err := ws.GetHistory(s_login_credentials, s_history_request.FromDate, s_history_request.ToDate)
 
 	array := *wsResult.XMLProvider.XMLGetPaymentsHistory.Payment
 	for k, v := range array {

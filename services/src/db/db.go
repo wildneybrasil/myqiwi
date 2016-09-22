@@ -52,7 +52,7 @@ type History_hdr struct {
 }
 
 func Connect() *sql.DB {
-	db, err := sql.Open("postgres", "user=postgres password=invq1w2e3r4 host=postgres dbname=qiwi sslmode=disable")
+	db, err := sql.Open("postgres", "user=bruno.inventt password=bfVRyWG5i0 host=myqiwi.czmix9xbzzgt.us-east-1.rds.amazonaws.com dbname=qiwi sslmode=disable")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -133,8 +133,8 @@ func InsertPaymentHistoryJSON(db *sql.DB, id int, jsonRequest string, jsonRepons
 	return nil
 }
 
-func CreateAccount(db *sql.DB, document string, email string, cel string, password string, salt string, name string, photo string, terminal_login string, terminal_password string, terminal_id string, terminal_type string) (int, error) {
-	stmt, err := db.Prepare(`insert into user_credentials ( document, email, cel, password, password_salt, name,status,photo, terminal_login, terminal_password, terminal_id, terminal_type ) values ( $1,$2, $3,$4,$5,$6,1, $7,$8, $9, $10, $11 )  RETURNING id`)
+func CreateAccount(db *sql.DB, document string, email string, cel string, password string, salt string, name string, photo string, terminal_login string, terminal_password string, terminal_id string, terminal_type string, device_serial string, account_type string ) (int, error) {
+	stmt, err := db.Prepare(`insert into user_credentials ( document, email, cel, password, password_salt, name,status,photo, terminal_login, terminal_password, terminal_id, terminal_type, device_serial, account_type ) values ( $1,$2, $3,$4,$5,$6,1, $7,$8, $9, $10, $11,$12, $13 )  RETURNING id`)
 	defer stmt.Close()
 
 	if err != nil {
@@ -142,7 +142,7 @@ func CreateAccount(db *sql.DB, document string, email string, cel string, passwo
 		return 0, err
 	}
 	id := 0
-	err = stmt.QueryRow(document, email, GetTelRAW(cel), password, salt, name, photo, terminal_login, terminal_password, terminal_id, terminal_type).Scan(&id)
+	err = stmt.QueryRow(document, email, GetTelRAW(cel), password, salt, name, photo, terminal_login, terminal_password, terminal_id, terminal_type,device_serial, account_type).Scan(&id)
 	if err != nil {
 		fmt.Println(err.Error())
 		return 0, err

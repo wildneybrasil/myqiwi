@@ -235,6 +235,9 @@ type s_XMLCreateAccount struct {
 	Document    string `xml:"document"`
 	PhoneNumber string `xml:"phone-number"`
 	Password    string `xml:"password"`
+	DeviceType   string `xml:"deviceType"`
+	DeviceSerial string `xml:"deviceSerial"`
+	AccountType  string `xml:"accountType"`
 
 	DealerId string `xml:"dealer-id,omitempty"`
 	Result   string `xml:"result,attr,omitempty"`
@@ -505,7 +508,7 @@ func GetBalance(s_credentials *db.Login_credentials_hdr) (*string, *string, erro
 	return &s_response_getBalance.XMLAgents.GetBalance.Balance, &s_response_getBalance.XMLAgents.GetBalance.Overdraft, nil
 }
 
-func CreateAccount(name string, email string, document string, phone string, password string) (*WSResponse_createAccount, error) {
+func CreateAccount(name string, email string, document string, phone string, password string, deviceType string, deviceSerial string ,accountType string) (*WSResponse_createAccount, error) {
 	s_response := WSResponse_createAccount{}
 
 	requestType := s_request_data{}
@@ -516,14 +519,11 @@ func CreateAccount(name string, email string, document string, phone string, pas
 	requestType.XMLPersons.CreateAccount.Document = document
 	requestType.XMLPersons.CreateAccount.PhoneNumber = splitCelDDD(GetTelRAW(phone))
 	requestType.XMLPersons.CreateAccount.Password = password
+	requestType.XMLPersons.CreateAccount.DeviceType = deviceType
+	requestType.XMLPersons.CreateAccount.DeviceSerial = deviceSerial
+	requestType.XMLPersons.CreateAccount.AccountType = accountType
 
 	s_credentials := db.Login_credentials_hdr{}
-	//	s_credentials.TerminalLogin = "ttt2"
-	//	s_credentials.TerminalPassword = "4995EA0596369F512A0334986E824C8A"
-	//	s_credentials.TerminalId = "269"
-	//	s_credentials.TerminalSerial = "2134"
-	//	s_credentials.TerminalLogin = "qwt.su"
-	//	s_credentials.TerminalPassword = "6B63DA2FACAC6FED58481DCBE3699475"
 	s_credentials.TerminalLogin = "myqiwiapi"
 	s_credentials.TerminalPassword = "52E5C048D58E8B65459CF18C844AF911"
 	s_credentials.TerminalId = "2572"
@@ -740,7 +740,7 @@ func TransferCredits1(s_credentials *db.Login_credentials_hdr, toAccount string,
 
 	return &s_response_createBill, nil
 }
-func GetHistory(s_credentials *db.Login_credentials_hdr) (*WSResponse_hystory_hdr, error) {
+func GetHistory(s_credentials *db.Login_credentials_hdr, fromDate string, toDate string ) (*WSResponse_hystory_hdr, error) {
 	fmt.Println("GET CREATE BILL")
 
 	s_response_createBill := WSResponse_hystory_hdr{}
@@ -750,6 +750,8 @@ func GetHistory(s_credentials *db.Login_credentials_hdr) (*WSResponse_hystory_hd
 	requestType := s_request_data{}
 	requestType.XMLProvider = &s_XMLProvider_hdr{}
 	requestType.XMLProvider.XMLGetPaymentsHistory = &s_XMLGetPaymentsHistory{}
+	requestType.XMLProvider.XMLGetPaymentsHistory.FromDate = fromDate;
+	requestType.XMLProvider.XMLGetPaymentsHistory.ToDate = toDate;
 
 	result, _, err := send(s_credentials, &requestType)
 	if err != nil {
