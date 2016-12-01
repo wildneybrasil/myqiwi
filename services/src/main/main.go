@@ -269,6 +269,124 @@ func main() {
 			c.JSON(http.StatusOK, s_result)
 		}
 	})
+	r.POST("/ws/CETExtrato", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
+		s_cet_extrato_request := s_cet_extrato_request_hdr{}
+
+		if c.BindJSON(&s_cet_extrato_request) == nil {
+			s_result, err := CETExtrato(s_cet_extrato_request)
+			if err != nil {
+				fmt.Println(err)
+
+				c.JSON(http.StatusOK, s_status{"failed", "System error", 500})
+				return
+			}
+
+			c.JSON(http.StatusOK, s_result)
+		}
+	})
+	r.POST("/ws/CETLocal", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
+		s_cet_local_request := s_cet_local_request_hdr{}
+
+		if c.BindJSON(&s_cet_local_request) == nil {
+			s_result, err := CETLocal(s_cet_local_request)
+			if err != nil {
+				fmt.Println(err)
+
+				c.JSON(http.StatusOK, s_status{"failed", "System error", 500})
+				return
+			}
+
+			c.JSON(http.StatusOK, s_result)
+		}
+	})
+	r.POST("/ws/listPlacas", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
+		s_listaPlaca_request := s_listaPlaca_request_hdr{}
+		fmt.Println("LIST PLACA")
+
+		if c.BindJSON(&s_listaPlaca_request) == nil {
+			s_result, err := ListPlacas(s_listaPlaca_request)
+			if err != nil {
+				fmt.Println(err)
+
+				c.JSON(http.StatusOK, s_status{"failed", "System error", 500})
+				return
+			}
+
+			c.JSON(http.StatusOK, s_result)
+		}
+	})
+	r.POST("/ws/removePlaca", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
+		s_cadastraPlaca_request := s_cadastraPlaca_request_hdr{}
+		if c.BindJSON(&s_cadastraPlaca_request) == nil {
+			s_result, err := RemovePlaca(s_cadastraPlaca_request)
+			if err != nil {
+				fmt.Println(err)
+
+				c.JSON(http.StatusOK, s_status{"failed", "System error", 500})
+				return
+			}
+
+			c.JSON(http.StatusOK, s_result)
+		}
+	})
+	r.POST("/ws/cadastraPlaca", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
+		s_cadastraPlaca_request := s_cadastraPlaca_request_hdr{}
+		if c.BindJSON(&s_cadastraPlaca_request) == nil {
+			s_result, err := CadastraPlaca(s_cadastraPlaca_request)
+			if err != nil {
+				fmt.Println(err)
+
+				c.JSON(http.StatusOK, s_status{"failed", "System error", 500})
+				return
+			}
+
+			c.JSON(http.StatusOK, s_result)
+		}
+	})
+	//	r.POST("/ws/CETLocal", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
+	//		s_cet_local_request := s_cet_local_request_hdr{}
+	//		if c.BindJSON(&s_cet_local_request) == nil {
+	//			s_result, err := CETLocal(s_cet_local_request)
+	//			if err != nil {
+	//				fmt.Println(err)
+
+	//				c.JSON(http.StatusOK, s_status{"failed", "System error", 500})
+	//				return
+	//			}
+
+	//			c.JSON(http.StatusOK, s_result)
+	//		}
+	//	})
+	r.POST("/ws/compraCAD", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
+		s_cet_buy_cad_request := s_cet_buy_cad_request_hdr{}
+		if c.BindJSON(&s_cet_buy_cad_request) == nil {
+			s_result, err := CETCompraCad(s_cet_buy_cad_request)
+			if err != nil {
+				fmt.Println(err)
+
+				c.JSON(http.StatusOK, s_status{"failed", "System error", 500})
+				return
+			}
+
+			c.JSON(http.StatusOK, s_result)
+		}
+	})
+	r.POST("/ws/ativaCAD", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
+		s_cet_ativa_cad_request := s_cet_ativate_cad_request_hdr{}
+		if c.BindJSON(&s_cet_ativa_cad_request) == nil {
+			s_result, err := CETAtivaCad(s_cet_ativa_cad_request)
+			if err != nil {
+				fmt.Println(err)
+
+				c.JSON(http.StatusOK, s_status{"failed", "System error", 500})
+				return
+			}
+
+			c.JSON(http.StatusOK, s_result)
+		} else {
+			c.JSON(http.StatusOK, s_status{"failed", "System error", 500})
+		}
+	})
 	r.POST("/ws/getBoletoInfo", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
 		s_boletoInfo_request := s_boletoInfo_request_hdr{}
 		if c.BindJSON(&s_boletoInfo_request) == nil {

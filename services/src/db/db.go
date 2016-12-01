@@ -51,8 +51,18 @@ type History_hdr struct {
 	Amount       string
 }
 
+type Placa_hdr struct {
+	Id        int    `json:"id"`
+	Name      string `json:"name"`
+	Placa     string `json:"placa"`
+	PlacaType string `json:"type"`
+}
+
 func Connect() *sql.DB {
-	db, err := sql.Open("postgres", "user=bruno.inventt password=bfVRyWG5i0 host=myqiwi.czmix9xbzzgt.us-east-1.rds.amazonaws.com dbname=qiwi sslmode=disable")
+	// PROD
+	//	db, err := sql.Open("postgres", "user=bruno.inventt password=bfVRyWG5i0 host=myqiwi.czmix9xbzzgt.us-east-1.rds.amazonaws.com dbname=qiwi sslmode=disable")
+	// DEV
+	db, err := sql.Open("postgres", "user=bruno.inventt password=bfVRyWG5i0 host=myqiwi-dev.czmix9xbzzgt.us-east-1.rds.amazonaws.com dbname=qiwi sslmode=disable")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -101,6 +111,22 @@ func InsertPaymentHistory(db *sql.DB, userId int, paymentType string, serviceId 
 	return id, nil
 }
 
+func InsertPlaca(db *sql.DB, name string, placa string, placa_type string, userid int) (int, error) {
+	stmt, err := db.Prepare(`insert into placas ( name, placa, placa_type, userid ) values ( $1, $2, $3, $4  )  RETURNING id`)
+	defer stmt.Close()
+
+	if err != nil {
+		fmt.Println(err.Error())
+		return 0, err
+	}
+	id := 0
+	err = stmt.QueryRow(name, placa, placa_type, userid).Scan(&id)
+	if err != nil {
+		fmt.Println(err.Error())
+		return 0, err
+	}
+	return id, nil
+}
 func InsertPaymentHistoryXML(db *sql.DB, xmlRequest string, xmlReponse string, status int) (int, error) {
 	stmt, err := db.Prepare(`insert into payment_history ( xml_request, xml_reponse, status ) values ( $1,$2, $3 )  RETURNING id`)
 	defer stmt.Close()
@@ -133,7 +159,7 @@ func InsertPaymentHistoryJSON(db *sql.DB, id int, jsonRequest string, jsonRepons
 	return nil
 }
 
-func CreateAccount(db *sql.DB, document string, email string, cel string, password string, salt string, name string, photo string, terminal_login string, terminal_password string, terminal_id string, terminal_type string, device_serial string, account_type string ) (int, error) {
+func CreateAccount(db *sql.DB, document string, email string, cel string, password string, salt string, name string, photo string, terminal_login string, terminal_password string, terminal_id string, terminal_type string, device_serial string, account_type string) (int, error) {
 	stmt, err := db.Prepare(`insert into user_credentials ( document, email, cel, password, password_salt, name,status,photo, terminal_login, terminal_password, terminal_id, terminal_type, device_serial, account_type ) values ( $1,$2, $3,$4,$5,$6,1, $7,$8, $9, $10, $11,$12, $13 )  RETURNING id`)
 	defer stmt.Close()
 
@@ -142,7 +168,7 @@ func CreateAccount(db *sql.DB, document string, email string, cel string, passwo
 		return 0, err
 	}
 	id := 0
-	err = stmt.QueryRow(document, email, GetTelRAW(cel), password, salt, name, photo, terminal_login, terminal_password, terminal_id, terminal_type,device_serial, account_type).Scan(&id)
+	err = stmt.QueryRow(document, email, GetTelRAW(cel), password, salt, name, photo, terminal_login, terminal_password, terminal_id, terminal_type, device_serial, account_type).Scan(&id)
 	if err != nil {
 		fmt.Println(err.Error())
 		return 0, err
@@ -452,13 +478,13 @@ func GetAuthToken(db *sql.DB, authToken string) (*Login_credentials_hdr, error) 
 	s_login_credentials := Login_credentials_hdr{}
 	fmt.Println("AUTH" + authToken)
 
-	stmt, err := db.Prepare("select u.password_salt, u.password, u.id, u.terminal_login, u.terminal_id , u.terminal_serial,terminal_password ,cel, email, u.account_type from user_tokens t, user_credentials u where t.user_credential_id=u.id and t.token=$1 and u.status=1")
+	stmt, err := db.Prepare("select u.password_salt, u.password, u.id, u.terminal_login, u.terminal_id , u.terminal_serial,terminal_password ,cel, email, u.account_type, document from user_tokens t, user_credentials u where t.user_credential_id=u.id and t.token=$1 and u.status=1")
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer stmt.Close()
 
-	err = stmt.QueryRow(authToken).Scan(&s_login_credentials.PasswordSalt, &s_login_credentials.Password, &s_login_credentials.Id, &s_login_credentials.TerminalLogin, &s_login_credentials.TerminalId, &s_login_credentials.TerminalSerial, &s_login_credentials.TerminalPassword, &s_login_credentials.Cel, &s_login_credentials.Email, &s_login_credentials.AccountType)
+	err = stmt.QueryRow(authToken).Scan(&s_login_credentials.PasswordSalt, &s_login_credentials.Password, &s_login_credentials.Id, &s_login_credentials.TerminalLogin, &s_login_credentials.TerminalId, &s_login_credentials.TerminalSerial, &s_login_credentials.TerminalPassword, &s_login_credentials.Cel, &s_login_credentials.Email, &s_login_credentials.AccountType, &s_login_credentials.Document)
 
 	if err != nil {
 		fmt.Println(err)
@@ -547,6 +573,36 @@ func ListHistory(db *sql.DB, userId int) (*[]History_hdr, error) {
 			return nil, err
 		}
 
+		result = append(result, item)
+	}
+	return &result, nil
+}
+
+func ListPlaca(db *sql.DB, userId int) (*[]Placa_hdr, error) {
+	result := make([]Placa_hdr, 0)
+
+	fmt.Printf("SEARCHING USER ID: %d\n", userId)
+
+	stmt, err := db.Prepare("select id, name, placa, placa_type from placas where userid=$1")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer stmt.Close()
+
+	rows, err := stmt.Query(userId)
+
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
+	}
+	for rows.Next() {
+		item := Placa_hdr{}
+		err = rows.Scan(&item.Id, &item.Name, &item.Placa, &item.PlacaType)
+		if err != nil {
+			return nil, err
+		}
+
+		fmt.Println("FOUND")
 		result = append(result, item)
 	}
 	return &result, nil

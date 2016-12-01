@@ -760,8 +760,6 @@ func paymentNFC5(s_payment_request s_payment_request_hdr) (s_payment_response s_
 		s_payment_response.Data = &s_payment_response_data_hdr{}
 
 		s_payment_response.Data.VoucherCode = transferResponse.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLVoucher.Code
-		s_payment_response.Data.PrtData1 = transferResponse.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLPaymentExtras.PrtData1
-		s_payment_response.Data.RptData1 = transferResponse.XMLProvider.XMLPurchaseOnline.XMLPayment.XMLPaymentExtras.RptData1
 		s_payment_response.Status = "success"
 
 	} else {
