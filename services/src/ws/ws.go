@@ -142,6 +142,7 @@ type s_XMLPaymentExtras struct {
 	Ev_temp              string `xml:"ev_temp,attr,omitempty"`
 	Ev_qtdCAD            string `xml:"ev_qtdCAD,attr,omitempty"`
 	Ev_document          string `xml:"ev_document,attr,omitempty"`
+	Ev_page              string `xml:"ev_page,attr,omitempty"`
 	Ev_scan              string `xml:"ev_scan,attr,omitempty"`
 	Ev_nsum              string `xml:"ev_nsum,attr,omitempty"`
 	Ev_combo1            string `xml:"ev_combo1,attr,omitempty"`
@@ -1596,6 +1597,7 @@ func RemovePlaca(s_credentials *db.Login_credentials_hdr, placa string, document
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentReceipt.Id = strconv.Itoa(int(currentId))
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_type = "2"
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_document = documento
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_placa = placa
 
 	result, _, err := send(s_credentials, &requestType)
 	if err != nil {
@@ -1649,20 +1651,20 @@ func ListaPlacas(s_credentials *db.Login_credentials_hdr, placa string, document
 
 	return &s_response_createBill, nil
 }
-func ListaExtrato(s_credentials2 *db.Login_credentials_hdr, days string, documento string, service string) (*WSResponse_transferCredits_hdr, error) {
+func ListaExtrato(s_credentials *db.Login_credentials_hdr, ev_page int, days string, documento string, service string) (*WSResponse_transferCredits_hdr, error) {
 	fmt.Println("GET CREATE BILL")
 
-	s_credentials := db.Login_credentials_hdr{}
-	s_credentials.TerminalLogin = adminLogin2
-	s_credentials.TerminalPassword = adminPassword2
-	s_credentials.TerminalId = TerminalId2
-	s_credentials.TerminalSerial = "2134"
+	//	s_credentials := db.Login_credentials_hdr{}
+	//	s_credentials.TerminalLogin = adminLogin2
+	//	s_credentials.TerminalPassword = adminPassword2
+	//	s_credentials.TerminalId = TerminalId2
+	//	s_credentials.TerminalSerial = "2134"
 
 	s_response_createBill := WSResponse_transferCredits_hdr{}
 
 	currentDate := arrow.Now().CFormat("%Y-%m-%dT%H:%M:%S")
 
-	lastId, _ := GetLastID(&s_credentials)
+	lastId, _ := GetLastID(s_credentials)
 	currentId, _ := strconv.ParseInt(lastId.XMLTerminals.XMLGetLastIds.XMLLastPayment.Id, 10, 0)
 	currentId = currentId + 1
 
@@ -1681,8 +1683,9 @@ func ListaExtrato(s_credentials2 *db.Login_credentials_hdr, days string, documen
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_type = "6"
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_qtdDay = days
 	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_document = documento
+	requestType.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Ev_page = strconv.Itoa(int(ev_page))
 
-	result, _, err := send(&s_credentials, &requestType)
+	result, _, err := send(s_credentials, &requestType)
 	if err != nil {
 		return nil, err
 	}

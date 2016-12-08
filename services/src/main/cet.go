@@ -16,9 +16,15 @@ type s_cadastraPlaca_request_hdr struct {
 type s_listaPlaca_request_hdr struct {
 	AuthToken string `json:"authToken"`
 }
+type s_renamePlaca_request_hdr struct {
+	AuthToken string `json:"authToken"`
+	Placa     string `json:"placa"`
+	Nome      string `json:"nome"`
+}
 type s_cet_extrato_request_hdr struct {
 	AuthToken string `json:"authToken"`
 	Days      string `json:"days"`
+	Page      int    `json:"page"`
 }
 type s_cet_local_request_hdr struct {
 	AuthToken string `json:"authToken"`
@@ -128,14 +134,7 @@ func RemovePlaca(s_cadastraPlaca_request s_cadastraPlaca_request_hdr) (s_placa_r
 
 	s_login_credentials, err := db.GetAuthToken(dbConn, s_cadastraPlaca_request.AuthToken)
 	if err == nil && s_login_credentials.Id > 0 {
-		if s_cadastraPlaca_request.Type == "" {
-			s_placa_response.StatusCode = 500
-			s_placa_response.Status = "failed"
-			s_placa_response.ErrorMessage = "Missing type."
-
-			return s_placa_response, nil
-		}
-		wsResponse, err := ws.RemovePlaca(s_login_credentials, s_cadastraPlaca_request.Placa, servico, s_login_credentials.Document)
+		wsResponse, err := ws.RemovePlaca(s_login_credentials, s_cadastraPlaca_request.Placa, s_login_credentials.Document, servico)
 
 		if wsResponse.XMLProvider.XMLCheckPaymentRequisites.Result != "0" {
 			s_placa_response.StatusCode = 400
@@ -148,7 +147,7 @@ func RemovePlaca(s_cadastraPlaca_request s_cadastraPlaca_request_hdr) (s_placa_r
 			return s_placa_response, nil
 		}
 
-		_, err = db.InsertPlaca(dbConn, s_cadastraPlaca_request.Nome, s_cadastraPlaca_request.Placa, s_cadastraPlaca_request.Type, s_login_credentials.Id)
+		_, err = db.DeletePlaca(dbConn, s_cadastraPlaca_request.Placa, s_login_credentials.Id)
 		if err != nil {
 			s_placa_response.StatusCode = 500
 			s_placa_response.Status = "failed"
@@ -193,6 +192,33 @@ func ListPlacas(s_listaPlaca_request s_listaPlaca_request_hdr) (s_placa_response
 	}
 	return s_placa_response, nil
 }
+func RenamePlaca(s_renamePlaca_request s_renamePlaca_request_hdr) (s_placa_response s_placa_list_response_hdr, err error) {
+	s_placa_response = s_placa_list_response_hdr{}
+
+	fmt.Println("RENAME PLACA\n")
+	dbConn := db.Connect()
+
+	defer dbConn.Close()
+
+	s_login_credentials, err := db.GetAuthToken(dbConn, s_renamePlaca_request.AuthToken)
+	if err == nil && s_login_credentials.Id > 0 {
+		err := db.RenamePlaca(dbConn, s_renamePlaca_request.Nome, s_renamePlaca_request.Placa, s_login_credentials.Id)
+
+		if err != nil {
+			s_placa_response.StatusCode = 500
+			s_placa_response.Status = "failed"
+			s_placa_response.ErrorMessage = "DB ERROR"
+
+			return s_placa_response, nil
+		}
+
+	} else {
+		s_placa_response.StatusCode = 403
+		s_placa_response.ErrorMessage = "Login/Senha inválido"
+		s_placa_response.Status = "failed"
+	}
+	return s_placa_response, nil
+}
 func CETExtrato(s_cet_extrato_request s_cet_extrato_request_hdr) (s_placa_response s_placa_response_hdr, err error) {
 	s_placa_response = s_placa_response_hdr{}
 
@@ -212,8 +238,7 @@ func CETExtrato(s_cet_extrato_request s_cet_extrato_request_hdr) (s_placa_respon
 			return s_placa_response, nil
 		}
 
-		wsResponse, err := ws.ListaExtrato(s_login_credentials, s_cet_extrato_request.Days, "32492094812", servico)
-		//		wsResponse, err := ws.ListaExtrato(s_login_credentials, s_cet_extrato_request.Days, s_login_credentials.Document, servico)
+		wsResponse, err := ws.ListaExtrato(s_login_credentials, s_cet_extrato_request.Page, s_cet_extrato_request.Days, s_login_credentials.Document, servico)
 
 		if wsResponse.XMLProvider.XMLCheckPaymentRequisites.Result != "0" {
 			s_placa_response.StatusCode = 400
@@ -225,6 +250,13 @@ func CETExtrato(s_cet_extrato_request s_cet_extrato_request_hdr) (s_placa_respon
 			s_placa_response.ErrorMessage, s_placa_response.StatusCode = ws.GetErrorMessage(wsResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.Result)
 			return s_placa_response, nil
 		}
+		if wsResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp3 != "200" {
+			s_placa_response.StatusCode = 400
+			s_placa_response.ErrorMessage = wsResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp2
+			return s_placa_response, nil
+		}
+		s_placa_response.JSON = wsResponse.XMLProvider.XMLCheckPaymentRequisites.XMLPayment.XMLPaymentExtras.Disp2
+
 		if err != nil {
 			s_placa_response.StatusCode = 500
 			s_placa_response.Status = "failed"

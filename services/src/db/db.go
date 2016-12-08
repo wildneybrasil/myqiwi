@@ -110,7 +110,40 @@ func InsertPaymentHistory(db *sql.DB, userId int, paymentType string, serviceId 
 	}
 	return id, nil
 }
+func RenamePlaca(db *sql.DB, name string, placa string, userid int) error {
+	fmt.Println("RENAMING PLACA", placa, name, userid)
 
+	stmt, err := db.Prepare(`update placas set name=$1 where userid=$2 and placa=$3`)
+	defer stmt.Close()
+
+	if err != nil {
+		fmt.Println(err.Error())
+		return err
+	}
+	_, err = stmt.Exec(name, userid, placa)
+	if err != nil {
+		fmt.Println(err.Error())
+		return err
+	}
+	return nil
+}
+
+func DeletePlaca(db *sql.DB, placa string, userid int) (int, error) {
+	stmt, err := db.Prepare(`delete from  placas where placa=$1 and userid=$2`)
+	defer stmt.Close()
+
+	if err != nil {
+		fmt.Println(err.Error())
+		return 0, err
+	}
+	id := 0
+	_, err = stmt.Exec(placa, userid)
+	if err != nil {
+		fmt.Println(err.Error())
+		return 0, err
+	}
+	return id, nil
+}
 func InsertPlaca(db *sql.DB, name string, placa string, placa_type string, userid int) (int, error) {
 	stmt, err := db.Prepare(`insert into placas ( name, placa, placa_type, userid ) values ( $1, $2, $3, $4  )  RETURNING id`)
 	defer stmt.Close()

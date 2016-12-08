@@ -329,6 +329,20 @@ func main() {
 			c.JSON(http.StatusOK, s_result)
 		}
 	})
+	r.POST("/ws/renamePlaca", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
+		s_renamePlaca_request := s_renamePlaca_request_hdr{}
+		if c.BindJSON(&s_renamePlaca_request) == nil {
+			s_result, err := RenamePlaca(s_renamePlaca_request)
+			if err != nil {
+				fmt.Println(err)
+
+				c.JSON(http.StatusOK, s_status{"failed", "System error", 500})
+				return
+			}
+
+			c.JSON(http.StatusOK, s_result)
+		}
+	})
 	r.POST("/ws/cadastraPlaca", tollbooth_gin.LimitHandler(limiterGeneric), func(c *gin.Context) {
 		s_cadastraPlaca_request := s_cadastraPlaca_request_hdr{}
 		if c.BindJSON(&s_cadastraPlaca_request) == nil {
