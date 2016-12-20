@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"os"
 	"log"
 	"strconv"
 	"strings"
@@ -62,7 +63,12 @@ func Connect() *sql.DB {
 	// PROD
 	//	db, err := sql.Open("postgres", "user=bruno.inventt password=bfVRyWG5i0 host=myqiwi.czmix9xbzzgt.us-east-1.rds.amazonaws.com dbname=qiwi sslmode=disable")
 	// DEV
-	db, err := sql.Open("postgres", "user=bruno.inventt password=bfVRyWG5i0 host=myqiwi-dev.czmix9xbzzgt.us-east-1.rds.amazonaws.com dbname=qiwi sslmode=disable")
+	qs := fmt.Sprintf("user=%s password=%s host=%s dbname=%s sslmode=disable", os.Getenv("DB_USER"), os.Getenv("DB_PASSWORD"), os.Getenv("DB_HOST"), os.Getenv("DB_NAME"));
+
+	db, err := sql.Open("postgres", qs)
+
+//	db, err := sql.Open("postgres", "user=bruno.inventt password=bfVRyWG5i0 host=myqiwi-dev.czmix9xbzzgt.us-east-1.rds.amazonaws.com dbname=qiwi sslmode=disable")
+
 	if err != nil {
 		log.Fatal(err)
 	}
