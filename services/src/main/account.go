@@ -161,13 +161,13 @@ func getProvider(s_provider_request s_provider_request_hdr) (s_provider_response
 				item := &result.XMLProvider.XMLGetProvider.Row[k]
 
 				for _, s := range *servicos {
-					if item.PrvId == s.RvId {
+					// if item.PrvId == s.RvId {
 						item.ServiceName = s.Name
 						item.Type = s.Type
 						item.LongName = s.LongName
 						item.Info = s.Info
 						item.Pos = s.Pos
-					}
+					// }
 				}
 			}
 			for k, _ := range result.XMLProvider.XMLGetProvider.Row {
